@@ -1,4 +1,4 @@
-import { BadRequestException, InternalException, HttpException, ErrorCode } from "../utils/root";
+import { BadRequestException, InternalException, HttpException, UnauthorizedException, UnprocessableEntityException, ErrorCode } from "../utils/root";
 import { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 
@@ -18,19 +18,34 @@ export const errorHandler = (method: Function) => {
           message: issue.message,
         }));
 
-        exception = new BadRequestException(
-          "Unprocessable Entity",              // ✅ generic message
+        exception = new UnprocessableEntityException(
+          "Validation Error",
           ErrorCode.UNPROCESSABLE_ENTITY,
-          fieldErrors                           // ✅ clean details
+          fieldErrors
         );
       } 
-      else {
+      else if (error instanceof Error) {
         exception = new InternalException(
           "An unexpected error occurred",
           ErrorCode.INTERNAL_EXCEPTION,
           error.message
         );
       }
+      else {
+        exception = new InternalException(
+          "Unknown Error",
+          ErrorCode.INTERNAL_EXCEPTION,
+          error
+        );
+      }
+      
+      console.error("[ErrorHandler]", {
+        message: exception.message,
+        errorCode: exception.errorCode,
+        errors: exception.errors,
+        stack: error instanceof Error ? error.stack : undefined
+      });
+
       next(exception);
     }
   };

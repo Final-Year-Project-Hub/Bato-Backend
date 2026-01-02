@@ -1,9 +1,9 @@
 
 export class HttpException extends Error {
     message: string;    
-    errorCode: any;
+    errorCode: ErrorCode;
     statusCode: number;
-    errors: ErrorCode;
+    errors: any;
 
     constructor(message: string, errorCode: ErrorCode, statusCode: number, error:any) {
         super(message);
@@ -18,8 +18,10 @@ export enum ErrorCode {
     USER_NOT_FOUND = 1001,
     USER_ALREADY_EXISTS = 1002,
     INVALID_CREDENTIALS = 1003,
-    UNPROCESSABLE_ENTITY = 2001,
-    INTERNAL_EXCEPTION = 3001
+    UNPROCESSABLE_ENTITY = 2001,//client side data send error , not with the server
+    UNAUTHORIZED_REQUEST=2002,
+    INTERNAL_EXCEPTION = 3001,
+    NOT_FOUND = 4004
 }
 
 export class BadRequestException extends HttpException {  
@@ -36,7 +38,17 @@ export class InternalException extends HttpException {
 }
 
 export class UnprocessableEntityException extends HttpException {
-    constructor(error:any,message:string,errorCode:number) {
-        super(message,errorCode,422,error)
+    constructor(message: string, errorCode: ErrorCode, errors: any = null) {
+        super(message,errorCode,422,errors)
+    }
+}
+export class UnauthorizedException extends HttpException {
+    constructor(message: string, errorCode: ErrorCode, errors: any = null) {
+        super(message,errorCode,401,errors)
+    }
+}
+export class NotFoundException extends HttpException {
+    constructor(message: string, errorCode: ErrorCode, errors: any = null) {
+        super(message,errorCode,404,errors)
     }
 }
