@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch --env-file=.env src/server.ts",
     "build": "npx prisma generate",
-    "start": "tsx src/server.ts"
+    "start": "npx tsx src/server.ts"
   },
   "keywords": [],
   "author": "",
