@@ -7,7 +7,7 @@ import { errorHandler } from "./middlewares/error-handler";
 
 const app:Express = express();
 app.use(cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:5173", // Default Vite port
+    origin: process.env.FRONTEND_URL || "http://localhost:3000", // Default Vite port
     credentials: true
 }));
 app.use(express.json());
