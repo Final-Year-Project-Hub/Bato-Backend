@@ -29,6 +29,71 @@ model User {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  // Relations
+  roadmaps       Roadmap[]
+  conversations  Conversation[]
+  preferences    UserPreferences?
+  knownTech      UserKnownTechnology[]
+
   @@index([role])
   @@index([email])
+}
+
+model Roadmap {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title       String
+  goal        String
+  proficiency String?
+  roadmapData Json     // Store full roadmap JSON from FastAPI
+  message     String?  // Original user message
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Conversation {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  roadmapId String?
+  messages  Json     // Array of {role, content}
+  
+  createdAt DateTime @default(now())
+  
+  @@index([userId])
+}
+
+model UserPreferences {
+  userId              String   @id
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  defaultProficiency  String   @default("beginner")
+  learningStyle       String   @default("balanced")
+  timeAvailability    String?
+  learningPace        String?
+  preferences         Json     @default("{}")
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model UserKnownTechnology {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  technology      String
+  proficiencyLevel String?
+  
+  createdAt       DateTime @default(now())
+  
+  @@unique([userId, technology])
+  @@index([userId])
 }

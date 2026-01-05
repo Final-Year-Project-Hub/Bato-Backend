@@ -1,0 +1,15 @@
+# Auto detect text files and normalize line endings to LF
+* text=auto
+
+# Prisma specific
+*.sql text eol=lf
+*.toml text eol=lf
+*.prisma text eol=lf
+
+# Source files
+*.ts text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+
+# Documentation
+*.md text eol=lf

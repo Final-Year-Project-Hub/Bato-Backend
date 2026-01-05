@@ -21,7 +21,7 @@ export enum ErrorCode {
     UNPROCESSABLE_ENTITY = 2001,//client side data send error , not with the server
     UNAUTHORIZED_REQUEST=2002,
     INTERNAL_EXCEPTION = 3001,
-    NOT_FOUND = 4004
+    NOT_FOUND = 4004,
 }
 
 export class BadRequestException extends HttpException {  
