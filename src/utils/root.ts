@@ -22,6 +22,8 @@ export enum ErrorCode {
     UNAUTHORIZED_REQUEST=2002,
     INTERNAL_EXCEPTION = 3001,
     NOT_FOUND = 4004,
+    EMAIL_SEND_FAILED=4005,
+    EMAIL_NOT_VERIFIED=4006,
 }
 
 export class BadRequestException extends HttpException {  

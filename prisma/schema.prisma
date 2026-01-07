@@ -16,6 +16,10 @@ enum Role {
   USER
   ADMIN
 }
+enum OtpPurpose{
+  EMAIL_VERIFICATION
+  FORGOT_PASSWORD
+}
 
 model User {
   id              String   @id @default(uuid())
@@ -23,11 +27,12 @@ model User {
   email           String   @unique
   password        String
   role            Role     @default(USER)
-  isEmailVerified Boolean  @default(false)
+  isVerified Boolean  @default(false)
   isActive        Boolean  @default(true)
   refreshToken    String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  otps Otp[]
 
   // Relations
   roadmaps       Roadmap[]
@@ -96,4 +101,20 @@ model UserKnownTechnology {
   
   @@unique([userId, technology])
   @@index([userId])
+}
+
+model Otp{
+  id Int @id @default(autoincrement())
+  userId String
+  otp String
+  purpose OtpPurpose
+  type String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields:[userId],references: [id],onDelete: Cascade)
+
+@@index([userId])
+@@index([expiresAt])
+@@index([otp])
 }

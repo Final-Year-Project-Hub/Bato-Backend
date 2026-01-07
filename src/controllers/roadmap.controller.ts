@@ -300,3 +300,36 @@ export async function ingestDocument(req:Request, res:Response) {
     });
   }
 }
+
+// export const forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
+//   try {
+//     const { email } = LoginSchema.parse(req.body);
+//     const user = await prisma.user.findUnique({
+//       where: { email },
+//     });
+
+//     if (!user) {
+//       throw new BadRequestException("User not found", ErrorCode.USER_NOT_FOUND);
+//     }
+
+//     const otp = generateOtp();
+//     const otpHash = await hashPassword(otp);
+//     const otpExpiresAt = new Date(Date.now() + 2 * 60 * 1000);
+
+//     await prisma.otp.create({
+//       data: {
+//         userId: user.id,
+//         otp: otpHash,
+//         expiresAt: otpExpiresAt,
+//         purpose: OtpPurpose.FORGOT_PASSWORD,
+//         type: "EMAIL",
+//       },
+//     });
+
+//     await sendEmail(email, otp, OtpPurpose.FORGOT_PASSWORD);
+
+//     res.status(200).json(new ApiResponse("Password reset OTP sent to email", null));
+//   } catch (error) {
+//     next(error);
+//   }
+// };
