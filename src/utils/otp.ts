@@ -4,14 +4,16 @@ import { ErrorCode } from "./root";
 import { OtpPurpose } from "@prisma/client";
 
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true, // true for 465, false for other ports
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
 });
 
-export const sendEmail = async (email: string, otp: string,purpose:OtpPurpose) => {
+export const sendEmail = async (email: string, otp: string, purpose: OtpPurpose) => {
   const mailOptions = {
     from: `"Bato AI" <${process.env.EMAIL_USER}>`,
     to: email,
@@ -20,9 +22,10 @@ export const sendEmail = async (email: string, otp: string,purpose:OtpPurpose) =
   };
   try {
     await transporter.sendMail(mailOptions);
-    console.log("Email sent successfully");
-  } catch (error) {
-    console.error("Error sending email:", error);
-    throw new BadRequestException("Error sending email",ErrorCode.EMAIL_SEND_FAILED)
+    console.log("Email sent successfully to:", email);
+  } catch (error: any) {
+    console.error("Nodemailer Error:", error);
+    // Throw error with message so controller can capture it
+    throw error;
   }
 };

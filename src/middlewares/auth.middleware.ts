@@ -92,7 +92,7 @@ export const verifyUser = async (
     const {
       accessToken: newAccessToken,
       refreshToken: newRefreshToken,
-    } = await generateAccessandRefreshToken(user.id);
+    } = await generateAccessandRefreshToken(user);
 
     const cookieOptions = {
       httpOnly: true,
