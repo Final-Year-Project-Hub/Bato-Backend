@@ -18,7 +18,13 @@ import {
 } from "../validation/auth.validations";
 import { any } from "zod";
 
-export const generateAccessandRefreshToken = async (user: any) => {
+export const generateAccessandRefreshToken = async (userId: string) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+  if (!user) {
+    throw new BadRequestException("User not found", ErrorCode.USER_NOT_FOUND);
+  }
   const accessToken = generateAccessToken({
     id: user.id,
     role: user.role,
@@ -44,26 +50,26 @@ export const signUp = async (
   res: Response,
   next: NextFunction
 ) => {
-  try {
-    const { email, password, fullName } = SignUpSchema.parse(req.body);
-
-    // Parallelize: 1. Check if user exists, 2. Hash password, 3. Generate and Hash OTP
-    const otp = generateOtp();
-    const [existingUser, hashedPassword, otpHash] = await Promise.all([
-      prisma.user.findUnique({ where: { email } }),
-      hashPassword(password),
-      hashPassword(otp),
-    ]);
-
+  const { email, password, fullName } = SignUpSchema.parse(
+    req.body
+  );
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+    });
+  
     if (existingUser) {
       throw new BadRequestException(
         "User already exists",
         ErrorCode.USER_ALREADY_EXISTS
       );
     }
-
-    const otpExpiresAt = new Date(Date.now() + 2 * 60 * 1000);
-
+  
+    const hashedPassword = await hashPassword(password);
+  //GenerateOtp 
+  const otp = generateOtp();
+  const otpHash = await hashPassword(otp);
+  const otpExpiresAt = new Date(Date.now() + 2 * 60 * 1000);
+  
     const newUser = await prisma.user.create({
       data: {
         fullName,
@@ -87,30 +93,17 @@ export const signUp = async (
         updatedAt: true,
       },
     });
-
-    try {
-      await sendEmail(email, otp, OtpPurpose.EMAIL_VERIFICATION);
-    } catch (error: any) {
-      // Cleanup: revert user creation if email fails
-      await prisma.user.delete({
-        where: { id: newUser.id },
-      });
-
-      // Pass the actual error message if available for better debugging
-      const errorMessage = error.message || "Failed to send OTP email";
-      throw new InternalException(
-        `${errorMessage}`,
-        ErrorCode.INTERNAL_EXCEPTION,
-        error
-      );
-    }
-    res
-      .status(201)
-      .json(new ApiResponse("User registered successfully", newUser));
+  try {
+    await sendEmail(email, otp, OtpPurpose.EMAIL_VERIFICATION);
+    
   } catch (error) {
-    next(error);
+    await prisma.user.delete({
+      where: { id: newUser.id },
+    });
+    throw new InternalException("Failed to send OTP email", ErrorCode.INTERNAL_EXCEPTION);  
   }
-};
+    res.status(201).json(new ApiResponse("User registered successfully", newUser));
+  };
 
 
 export const login = async (
@@ -126,11 +119,8 @@ export const login = async (
     if (!user) {
       throw new BadRequestException("User not found", ErrorCode.USER_NOT_FOUND);
     }
-    if (!user.isVerified) {
-      throw new BadRequestException(
-        "User is not verified",
-        ErrorCode.EMAIL_NOT_VERIFIED
-      );
+    if(!user.isVerified){
+      throw new BadRequestException("User is not verified", ErrorCode.EMAIL_NOT_VERIFIED);
     }
     const passwordMatch = await comparePassword(password, user.password);
     if (!passwordMatch) {
@@ -140,9 +130,20 @@ export const login = async (
       );
     }
     const { accessToken, refreshToken } = await generateAccessandRefreshToken(
-      user
+      user.id
     );
-
+    const loggedInUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        isVerified: true,
+        createdAt: true,
+        updatedAt: true,
+        role: true,
+      },
+    });
     const cookieOptions: CookieOptions = {
       httpOnly: true,
       secure: true,
@@ -155,15 +156,7 @@ export const login = async (
       .cookie("role", user.role.trim(), cookieOptions) // Set role in a cookie
       .json(
         new ApiResponse("User logged in successfully", {
-          user: {
-            id: user.id,
-            fullName: user.fullName,
-            email: user.email,
-            isVerified: user.isVerified,
-            createdAt: user.createdAt,
-            updatedAt: user.updatedAt,
-            role: user.role,
-          },
+          user: loggedInUser,
           accessToken,
           refreshToken,
         })
