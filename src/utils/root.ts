@@ -24,6 +24,8 @@ export enum ErrorCode {
     NOT_FOUND = 4004,
     EMAIL_SEND_FAILED=4005,
     EMAIL_NOT_VERIFIED=4006,
+    INVALID_OTP=4007,
+    RATE_LIMIT_EXCEEDED=4008,
 }
 
 export class BadRequestException extends HttpException {  

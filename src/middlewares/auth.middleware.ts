@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import { generateAccessandRefreshToken } from "../controllers/auth.controller";
 import { comparePassword } from "../utils/hash";
+import { auth } from "../lib/auth";
 
 interface TokenPayload extends JwtPayload {
   data: {
@@ -19,6 +20,23 @@ export const verifyUser = async (
   next: NextFunction
 ) => {
   try {
+    // 1. Check for Better Auth Session first
+    const session = await auth.api.getSession({
+      headers: new Headers(req.headers as any),
+    });
+
+    if (session) {
+      (req as any).user = {
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+        role: (session.user as any).role || "USER",
+      };
+      (req as any).session = session.session;
+      return next();
+    }
+
+    // 2. Fallback to Legacy JWT Auth
     const accessToken =
       req.cookies.accessToken ||
       req.header("Authorization")?.replace("Bearer ", "");
@@ -41,7 +59,7 @@ export const verifyUser = async (
         select: {
           id: true,
           email: true,
-          fullName: true,
+          name: true,
           role: true,
         },
       });
@@ -106,7 +124,7 @@ export const verifyUser = async (
     (req as any).user = {
       id: user.id,
       email: user.email,
-      fullName: user.fullName,
+      name: user.name,
       role: user.role,
     };
 

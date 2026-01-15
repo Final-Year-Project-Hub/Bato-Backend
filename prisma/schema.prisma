@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,109 +6,185 @@ datasource db {
   provider = "postgresql"
 }
 
-enum Role {
-  USER
-  ADMIN
-}
-enum OtpPurpose{
-  EMAIL_VERIFICATION
-  FORGOT_PASSWORD
-}
-
 model User {
-  id              String   @id @default(uuid())
-  fullName        String?
-  email           String   @unique
-  password        String
-  role            Role     @default(USER)
-  isVerified Boolean  @default(false)
-  isActive        Boolean  @default(true)
-  refreshToken    String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  otps Otp[]
-
-  // Relations
-  roadmaps       Roadmap[]
-  conversations  Conversation[]
-  preferences    UserPreferences?
-  knownTech      UserKnownTechnology[]
+  id            String                @id @default(uuid())
+  name          String?
+  email         String                @unique
+  emailVerified Boolean               @default(false)
+  image         String?
+  password      String?
+  role          Role                  @default(USER)
+  isActive      Boolean               @default(true)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  refreshToken  String?
+  accounts      Account[]
+  chatSessions  ChatSession[]
+  roadmaps      Roadmap[]
+  sessions      Session[]
+  knownTech     UserKnownTechnology[]
+  preferences   UserPreferences?
+  otps          Otp[]
 
   @@index([role])
   @@index([email])
 }
 
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime
+  updatedAt DateTime
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime
+  updatedAt             DateTime
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+}
+
 model Roadmap {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  title       String
-  goal        String
-  proficiency String?
-  roadmapData Json     // Store full roadmap JSON from FastAPI
-  message     String?  // Original user message
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  id            String           @id @default(uuid())
+  userId        String
+  chatSessionId String?
+  title         String
+  goal          String
+  intent        String           @default("learn")
+  proficiency   String?
+  roadmapData   Json
+  message       String?
+  isSelected    Boolean          @default(false)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  messages      Message[]
+  chatSession   ChatSession?     @relation(fields: [chatSessionId], references: [id])
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  progress      RoadmapProgress?
+
   @@index([userId])
+  @@index([userId, isSelected])
+  @@index([chatSessionId])
   @@index([createdAt])
 }
 
-model Conversation {
-  id        String   @id @default(uuid())
+model ChatSession {
+  id        String    @id @default(uuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  roadmapId String?
-  messages  Json     // Array of {role, content}
-  
-  createdAt DateTime @default(now())
-  
+  title     String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Message[]
+  roadmaps  Roadmap[]
+
   @@index([userId])
+  @@index([userId, createdAt])
+}
+
+model Message {
+  id            String      @id @default(uuid())
+  chatSessionId String
+  role          String
+  content       String
+  roadmapId     String?
+  createdAt     DateTime    @default(now())
+  chatSession   ChatSession @relation(fields: [chatSessionId], references: [id], onDelete: Cascade)
+  roadmap       Roadmap?    @relation(fields: [roadmapId], references: [id])
+
+  @@index([chatSessionId])
+  @@index([chatSessionId, createdAt])
+}
+
+model RoadmapProgress {
+  id              String   @id @default(uuid())
+  roadmapId       String   @unique
+  completedPhases Json     @default("[]")
+  completedTopics Json     @default("[]")
+  currentPhase    Int      @default(0)
+  currentTopic    String?
+  totalTimeSpent  Float    @default(0)
+  lastAccessedAt  DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  roadmap         Roadmap  @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+
+  @@index([roadmapId])
 }
 
 model UserPreferences {
-  userId              String   @id
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  defaultProficiency  String   @default("beginner")
-  learningStyle       String   @default("balanced")
-  timeAvailability    String?
-  learningPace        String?
-  preferences         Json     @default("{}")
-  
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  userId             String   @id
+  defaultProficiency String   @default("beginner")
+  learningStyle      String   @default("balanced")
+  timeAvailability   String?
+  learningPace       String?
+  preferences        Json     @default("{}")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model UserKnownTechnology {
-  id              String   @id @default(uuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  technology      String
+  id               String   @id @default(uuid())
+  userId           String
+  technology       String
   proficiencyLevel String?
-  
-  createdAt       DateTime @default(now())
-  
+  createdAt        DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([userId, technology])
   @@index([userId])
 }
 
-model Otp{
-  id Int @id @default(autoincrement())
-  userId String
-  otp String
-  purpose OtpPurpose
-  type String
+model Otp {
+  id        String     @id @default(cuid())
+  userId    String
+  email     String
+  otp       String
+  purpose   OtpPurpose
+  type      String
+  verified  Boolean    @default(false)
+  attempts  Int        @default(0)
   expiresAt DateTime
-  createdAt DateTime @default(now())
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  user User @relation(fields:[userId],references: [id],onDelete: Cascade)
+  @@index([userId])
+  @@index([email])
+  @@index([otp])
+  @@map("otps")
+}
 
-@@index([userId])
-@@index([expiresAt])
-@@index([otp])
+enum Role {
+  USER
+  ADMIN
+}
+
+enum OtpPurpose {
+  EMAIL_VERIFICATION
+  FORGOT_PASSWORD
 }
