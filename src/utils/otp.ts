@@ -4,10 +4,15 @@ import {prisma} from "../lib/prisma.js";
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: parseInt(process.env.SMTP_PORT || "587"),
-  secure: false,
+  secure: false, // true for 465, false for other ports
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
+  },
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000, // 10 seconds
+  tls: {
+    rejectUnauthorized: false, // Avoid disconnection due to SSL certificate issues in some environments
   },
 });
 

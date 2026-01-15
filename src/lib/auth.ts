@@ -37,6 +37,7 @@ export const auth = betterAuth({
   ],
   advanced: {
     disableOriginCheck: true, // Allow requests without Origin header (e.g. from Postman)
+    disableCSRFCheck: true, // Explicitly disable CSRF check to match disableOriginCheck and resolve deprecation warning
   },
   logger: {
     level: "debug",
