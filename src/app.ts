@@ -1,6 +1,9 @@
 import express, { Express } from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import swaggerUi from "swagger-ui-express";
+import YAML from "yamljs";
+import path from "path";
 import authRoutes from "./routes/auth.routes";
 import roadmapRoutes from "./routes/roadmap.routes";
 import chatRoutes from "./routes/chat.routes";
@@ -11,6 +14,9 @@ import { auth } from "./lib/auth";
 import { toNodeHandler } from "better-auth/node";
 
 const app: Express = express();
+
+// Load Swagger documentation
+const swaggerDocument = YAML.load(path.join(__dirname, "../swagger.yaml"));
 
 // Parse allowed origins from environment variable
 const allowedOrigins = (
@@ -44,6 +50,16 @@ app.all("/api/auth/*path", toNodeHandler(auth));
 app.use(express.json());
 app.use(cookieParser());
 
+// Swagger API Documentation
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerDocument, {
+    customCss: ".swagger-ui .topbar { display: none }",
+    customSiteTitle: "Bato-AI API Documentation",
+  })
+);
+
 // Routes
 app.use("/auth", authRoutes);
 app.use("/api/roadmap", roadmapRoutes);
@@ -55,10 +71,13 @@ app.get("/", (req, res) => {
   res.json({
     message: "Bato-AI Backend Server",
     version: "1.0.0",
+    documentation: "http://localhost:4000/api-docs",
     endpoints: {
       betterAuth: "/api/auth/ (signup, signin, signout,email)",
       customAuth: "/auth (verify-otp, resend-otp)",
       roadmap: "/api/roadmap",
+      chat: "/api/chats",
+      progress: "/api/roadmap/:roadmapId/progress",
     },
   });
 });
