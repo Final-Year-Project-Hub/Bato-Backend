@@ -25,6 +25,9 @@ const createEmailTransporter = () => {
     host: "smtp.gmail.com",
     port: 587,
     secure: false, // use STARTTLS
+    requireTLS: true,
+    logger: true, // log to console
+    debug: true, // include SMTP traffic in logs
     auth: {
       type: "OAuth2",
       user: process.env.GMAIL_USER,
