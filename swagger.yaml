@@ -1,0 +1,1096 @@
+openapi: 3.0.3
+info:
+  title: Bato-AI Backend API
+  description: |
+    Comprehensive API documentation for the Bato-AI learning platform backend.
+
+    ## Features
+    - **Better Auth Integration**: OAuth2-based authentication with Google
+    - **Email Verification**: OTP-based email verification system
+    - **AI-Powered Roadmaps**: Generate personalized learning roadmaps using RAG
+    - **Progress Tracking**: Track learning progress across roadmaps
+    - **Chat System**: Interactive chat sessions for learning assistance
+
+    ## Authentication
+    Most endpoints require authentication via Better Auth session cookies or Bearer tokens.
+  version: 1.0.0
+  contact:
+    name: Bato-AI Team
+    email: support@bato-ai.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:4000
+    description: Local development server
+  - url: https://bato-backend.onrender.com
+    description: Production server
+
+tags:
+  - name: Better Auth
+    description: Better Auth endpoints for signup, signin, OAuth, etc.
+  - name: Custom Auth
+    description: Custom authentication endpoints (OTP verification)
+  - name: Roadmap
+    description: AI-powered learning roadmap generation and management
+  - name: Chat
+    description: Chat session management for learning assistance
+  - name: Progress
+    description: Learning progress tracking
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token from Better Auth
+
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: better-auth.session_token
+      description: Better Auth session cookie
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: "Error message"
+        errorCode:
+          type: string
+          example: "ERROR_CODE"
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+          nullable: true
+        emailVerified:
+          type: boolean
+        image:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Roadmap:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        techStack:
+          type: array
+          items:
+            type: string
+        difficulty:
+          type: string
+          enum: [beginner, intermediate, advanced]
+        estimatedDuration:
+          type: string
+        roadmapData:
+          type: object
+          description: JSON structure containing phases, topics, and resources
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ChatSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        chatId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        roadmapId:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    Progress:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        roadmapId:
+          type: string
+          format: uuid
+        completedPhases:
+          type: array
+          items:
+            type: integer
+        completedTopics:
+          type: array
+          items:
+            type: string
+        currentPhase:
+          type: integer
+        lastAccessedAt:
+          type: string
+          format: date-time
+        completionPercentage:
+          type: number
+          format: float
+
+paths:
+  /:
+    get:
+      summary: API Root
+      description: Returns basic information about the API and available endpoints
+      tags:
+        - General
+      responses:
+        "200":
+          description: API information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Bato-AI Backend Server"
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  endpoints:
+                    type: object
+
+  # ==================== Better Auth Endpoints ====================
+  /api/auth/sign-up/email:
+    post:
+      summary: Sign up with email
+      description: Register a new user using email and password (Better Auth)
+      tags:
+        - Better Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - name
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                name:
+                  type: string
+      responses:
+        "201":
+          description: User created successfully
+        "400":
+          description: Invalid input or user already exists
+
+  /api/auth/sign-in/email:
+    post:
+      summary: Sign in with email
+      description: Authenticate user with email and password (Better Auth)
+      tags:
+        - Better Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Successfully authenticated
+        "401":
+          description: Invalid credentials
+
+  /api/auth/sign-out:
+    post:
+      summary: Sign out
+      description: Sign out the current user (Better Auth)
+      tags:
+        - Better Auth
+      security:
+        - CookieAuth: []
+      responses:
+        "200":
+          description: Successfully signed out
+
+  /api/auth/sign-in/social:
+    post:
+      summary: OAuth sign in
+      description: Sign in using OAuth providers (Google, etc.) via Better Auth
+      tags:
+        - Better Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                provider:
+                  type: string
+                  enum: [google]
+                callbackURL:
+                  type: string
+      responses:
+        "200":
+          description: OAuth redirect URL
+        "400":
+          description: Invalid provider
+
+  # ==================== Custom Auth Endpoints ====================
+  /auth/verifyOtp:
+    post:
+      summary: Verify OTP
+      description: Verify email using OTP code sent to user's email
+      tags:
+        - Custom Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - otp
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "user@example.com"
+                otp:
+                  type: string
+                  pattern: '^\d{6}$'
+                  example: "123456"
+      responses:
+        "200":
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Email verified successfully"
+                  data:
+                    type: object
+                    properties:
+                      verified:
+                        type: boolean
+                        example: true
+        "400":
+          description: Invalid or expired OTP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/resendOtp:
+    post:
+      summary: Resend OTP
+      description: Request a new OTP code to be sent to user's email
+      tags:
+        - Custom Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "user@example.com"
+      responses:
+        "200":
+          description: OTP sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "OTP sent successfully"
+                  data:
+                    type: object
+                    properties:
+                      email:
+                        type: string
+                      expiresIn:
+                        type: string
+                        example: "10 minutes"
+        "400":
+          description: User not found or rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/profile:
+    get:
+      summary: Get user profile
+      description: Get authenticated user's profile information
+      tags:
+        - Custom Auth
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Access granted!"
+                  user:
+                    $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+
+  # ==================== Roadmap Endpoints ====================
+  /api/roadmap/health:
+    get:
+      summary: Health check
+      description: Verify FastAPI connectivity and service health
+      tags:
+        - Roadmap
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  fastapi:
+                    type: object
+        "503":
+          description: Service unavailable
+
+  /api/roadmap/ingest:
+    post:
+      summary: Ingest documents
+      description: Upload and process documents into the vector database via FastAPI
+      tags:
+        - Roadmap
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                documentUrl:
+                  type: string
+                  format: uri
+                framework:
+                  type: string
+      responses:
+        "200":
+          description: Document ingested successfully
+        "500":
+          description: Ingestion failed
+
+  /api/roadmap/stream:
+    post:
+      summary: Generate roadmap (streaming)
+      description: Generate a personalized learning roadmap using AI with Server-Sent Events (SSE)
+      tags:
+        - Roadmap
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - techStack
+                - difficulty
+              properties:
+                title:
+                  type: string
+                  example: "Full Stack Web Development"
+                description:
+                  type: string
+                  example: "Learn modern web development"
+                techStack:
+                  type: array
+                  items:
+                    type: string
+                  example: ["React", "Node.js", "PostgreSQL"]
+                difficulty:
+                  type: string
+                  enum: [beginner, intermediate, advanced]
+                  example: "intermediate"
+                estimatedDuration:
+                  type: string
+                  example: "3 months"
+      responses:
+        "200":
+          description: Roadmap generation stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-Sent Events stream with roadmap data
+        "400":
+          description: Invalid input
+        "500":
+          description: Generation failed
+
+  /api/roadmap:
+    get:
+      summary: Get user roadmaps
+      description: Retrieve all roadmaps for the authenticated user
+      tags:
+        - Roadmap
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [createdAt, updatedAt, title]
+            default: createdAt
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        "200":
+          description: List of roadmaps
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Roadmap"
+                  pagination:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      limit:
+                        type: integer
+                      offset:
+                        type: integer
+
+  /api/roadmap/{id}:
+    get:
+      summary: Get roadmap by ID
+      description: Retrieve a specific roadmap by its ID
+      tags:
+        - Roadmap
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Roadmap details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/Roadmap"
+        "404":
+          description: Roadmap not found
+
+  /api/roadmap/{id}/select:
+    post:
+      summary: Select roadmap as active
+      description: Set a roadmap as the user's currently active roadmap
+      tags:
+        - Roadmap
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Roadmap selected successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/Roadmap"
+        "404":
+          description: Roadmap not found
+
+  # ==================== Chat Endpoints ====================
+  /api/chats:
+    post:
+      summary: Create chat session
+      description: Create a new chat session for learning assistance
+      tags:
+        - Chat
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userId
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+                initialMessage:
+                  type: string
+      responses:
+        "201":
+          description: Chat session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/ChatSession"
+
+    get:
+      summary: Get chat sessions
+      description: Retrieve all chat sessions for a user
+      tags:
+        - Chat
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: List of chat sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChatSession"
+
+  /api/chats/{chatId}:
+    get:
+      summary: Get chat session
+      description: Retrieve a specific chat session by ID
+      tags:
+        - Chat
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Chat session details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/ChatSession"
+        "404":
+          description: Chat session not found
+
+    delete:
+      summary: Delete chat session
+      description: Delete a chat session and all its messages
+      tags:
+        - Chat
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Chat session deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+    patch:
+      summary: Update chat title
+      description: Update the title of a chat session
+      tags:
+        - Chat
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+              properties:
+                title:
+                  type: string
+      responses:
+        "200":
+          description: Chat title updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/ChatSession"
+
+  /api/chats/{chatId}/messages:
+    get:
+      summary: Get chat messages
+      description: Retrieve all messages in a chat session
+      tags:
+        - Chat
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Message"
+
+    post:
+      summary: Add message
+      description: Add a new message to a chat session
+      tags:
+        - Chat
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - role
+                - content
+              properties:
+                role:
+                  type: string
+                  enum: [user, assistant]
+                content:
+                  type: string
+                roadmapId:
+                  type: string
+                  format: uuid
+      responses:
+        "201":
+          description: Message added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/Message"
+
+  # ==================== Progress Endpoints ====================
+  /api/roadmap/{roadmapId}/progress:
+    get:
+      summary: Get progress
+      description: Get learning progress for a specific roadmap
+      tags:
+        - Progress
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: roadmapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Progress details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/Progress"
+        "404":
+          description: Progress not found
+
+    patch:
+      summary: Update progress
+      description: Update learning progress for a roadmap
+      tags:
+        - Progress
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: roadmapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                completedPhases:
+                  type: array
+                  items:
+                    type: integer
+                completedTopics:
+                  type: array
+                  items:
+                    type: string
+                currentPhase:
+                  type: integer
+      responses:
+        "200":
+          description: Progress updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/Progress"
+
+  /api/roadmap/{roadmapId}/progress/complete-phase:
+    post:
+      summary: Complete phase
+      description: Mark a learning phase as completed
+      tags:
+        - Progress
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: roadmapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phaseIndex
+              properties:
+                phaseIndex:
+                  type: integer
+                  minimum: 0
+      responses:
+        "200":
+          description: Phase completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/Progress"
+
+  /api/roadmap/{roadmapId}/progress/complete-topic:
+    post:
+      summary: Complete topic
+      description: Mark a learning topic as completed
+      tags:
+        - Progress
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: roadmapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - topicPath
+              properties:
+                topicPath:
+                  type: string
+                  example: "phase-0.topic-1"
+      responses:
+        "200":
+          description: Topic completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/Progress"
+
+  /api/roadmap/{roadmapId}/progress/reset:
+    post:
+      summary: Reset progress
+      description: Reset all learning progress for a roadmap
+      tags:
+        - Progress
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: roadmapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Progress reset successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/Progress"
