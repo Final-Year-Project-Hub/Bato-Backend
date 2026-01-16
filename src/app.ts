@@ -4,6 +4,8 @@ import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
 import path from "path";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
 import authRoutes from "./routes/auth.routes";
 import roadmapRoutes from "./routes/roadmap.routes";
 import chatRoutes from "./routes/chat.routes";
@@ -12,6 +14,9 @@ import { errorMiddleware } from "./middlewares/error";
 import { errorHandler } from "./middlewares/error-handler";
 import { auth } from "./lib/auth";
 import { toNodeHandler } from "better-auth/node";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app: Express = express();
 
