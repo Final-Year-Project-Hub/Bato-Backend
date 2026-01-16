@@ -1,15 +1,9 @@
 import { NextFunction, Request, Response } from "express";
-import {
-  UnauthorizedException,
-  ErrorCode,
-  InternalException,
-} from "../utils/root";
+import { UnauthorizedException, ErrorCode } from "../utils/root";
 import { prisma } from "../lib/prisma.js";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import { generateAccessandRefreshToken } from "../controllers/auth.controller";
 import { comparePassword } from "../utils/hash";
-import { auth } from "../lib/auth";
-import { fromNodeHeaders } from "better-auth/node";
 
 interface TokenPayload extends JwtPayload {
   data: {
@@ -25,23 +19,7 @@ export const verifyUser = async (
   next: NextFunction,
 ) => {
   try {
-    // 1. Check for Better Auth Session first
-    const session = await auth.api.getSession({
-      headers: fromNodeHeaders(req.headers),
-    });
-
-    if (session) {
-      (req as any).user = {
-        id: session.user.id,
-        email: session.user.email,
-        name: session.user.name,
-        role: (session.user as any).role || "USER",
-      };
-      (req as any).session = session.session;
-      return next();
-    }
-
-    // 2. Fallback to Legacy JWT Auth
+    // Check for JWT access token
     const accessToken =
       req.cookies.accessToken ||
       req.header("Authorization")?.replace("Bearer ", "");
@@ -87,6 +65,7 @@ export const verifyUser = async (
       }
     }
 
+    // Access token expired, try refresh token
     const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
@@ -124,6 +103,7 @@ export const verifyUser = async (
       );
     }
 
+    // Generate new tokens
     const { accessToken: newAccessToken, refreshToken: newRefreshToken } =
       await generateAccessandRefreshToken(user.id);
 

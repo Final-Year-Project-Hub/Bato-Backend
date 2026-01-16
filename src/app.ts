@@ -12,8 +12,7 @@ import chatRoutes from "./routes/chat.routes";
 import progressRoutes from "./routes/progress.routes";
 import { errorMiddleware } from "./middlewares/error";
 import { errorHandler } from "./middlewares/error-handler";
-import { auth } from "./lib/auth";
-import { toNodeHandler } from "better-auth/node";
+// Better Auth removed - using custom JWT authentication
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -47,10 +46,10 @@ app.use(
       return callback(null, true);
     },
     credentials: true,
-  })
+  }),
 );
 
-app.all("/api/auth/*path", toNodeHandler(auth));
+// Better Auth route handler removed
 
 app.use(express.json());
 app.use(cookieParser());
@@ -62,7 +61,7 @@ app.use(
   swaggerUi.setup(swaggerDocument, {
     customCss: ".swagger-ui .topbar { display: none }",
     customSiteTitle: "Bato-AI API Documentation",
-  })
+  }),
 );
 
 // Routes

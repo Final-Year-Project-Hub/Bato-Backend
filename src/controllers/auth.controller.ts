@@ -1,12 +1,13 @@
 import { comparePassword, hashPassword } from "../utils/hash";
 import { createAndSendOtp, generateOtp } from "../utils/otp";
-import { prisma } from "../lib/auth";
+import { prisma } from "../lib/prisma";
 import { Request, Response, NextFunction, CookieOptions } from "express";
 import { LoginSchema, SignUpSchema } from "../validation/auth.validations";
 import {
   BadRequestException,
   ErrorCode,
   InternalException,
+  UnauthorizedException,
 } from "../utils/root";
 import { ApiResponse } from "../utils/apiResponse";
 import { generateAccessToken, generateRefreshToken } from "../utils/jwt";
@@ -43,167 +44,214 @@ export const generateAccessandRefreshToken = async (userId: string) => {
 // export const generateOtp = (): string =>
 //   Math.floor(100000 + Math.random() * 900000).toString();
 
-// export const signUp = async (
-//   req: Request,
-//   res: Response,
-//   next: NextFunction
-// ) => {
-//   const { email, password, fullName } = SignUpSchema.parse(
-//     req.body
-//   );
-//     const existingUser = await prisma.user.findUnique({
-//       where: { email },
-//     });
+export const signUp = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { email, password, name } = req.body;
 
-//     if (existingUser) {
-//       throw new BadRequestException(
-//         "User already exists",
-//         ErrorCode.USER_ALREADY_EXISTS
-//       );
-//     }
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+    });
 
-//     const hashedPassword = await hashPassword(password);
-//   //GenerateOtp
-//   const otp = generateOtp();
-//   const otpHash = await hashPassword(otp);
-//   const otpExpiresAt = new Date(Date.now() + 2 * 60 * 1000);
+    if (existingUser) {
+      if (existingUser.emailVerified) {
+        // Verified user trying to sign up again -> Error
+        throw new BadRequestException(
+          "User already exists",
+          ErrorCode.USER_ALREADY_EXISTS,
+        );
+      } else {
+        // Unverified user returning -> Let them finish registration
+        // 1. Update password & name (in case they changed them)
+        const hashedPassword = await hashPassword(password);
+        await prisma.user.update({
+          where: { id: existingUser.id },
+          data: { password: hashedPassword, name },
+        });
 
-//     const newUser = await prisma.user.create({
-//       data: {
-//         fullName,
-//         email,
-//         password: hashedPassword,
-//         otps: {
-//           create: {
-//             otp: otpHash,
-//             expiresAt: otpExpiresAt,
-//             purpose: OtpPurpose.EMAIL_VERIFICATION,
-//             type: "EMAIL",
-//           },
-//         },
-//       },
-//       select: {
-//         id: true,
-//         fullName: true,
-//         email: true,
-//         otps: true,
-//         createdAt: true,
-//         updatedAt: true,
-//       },
-//     });
-//   try {
-//     await sendEmail(email, otp, OtpPurpose.EMAIL_VERIFICATION);
+        // 2. Resend the OTP
+        try {
+          // Note: createAndSendOtp usually creates a NEW db record for OTP
+          await createAndSendOtp(existingUser.id, email, name);
 
-//   } catch (error) {
-//     await prisma.user.delete({
-//       where: { id: newUser.id },
-//     });
-//     throw new InternalException("Failed to send OTP email", ErrorCode.INTERNAL_EXCEPTION);
-//   }
-//     res.status(201).json(new ApiResponse("User registered successfully", newUser));
-//   };
+          res.status(200).json(
+            new ApiResponse(
+              "Account exists but was unverified. A new OTP has been sent to your email.",
+              {
+                id: existingUser.id,
+                email,
+                name,
+                isRetry: true,
+              },
+            ),
+          );
+          return;
+        } catch (error) {
+          throw new InternalException(
+            "Failed to send OTP email",
+            ErrorCode.INTERNAL_EXCEPTION,
+          );
+        }
+      }
+    }
 
-// export const login = async (
-//   req: Request,
-//   res: Response,
-//   next: NextFunction
-// ) => {
-//   const { email, password } = LoginSchema.parse(req.body);
-//   try {
-//     const user = await prisma.user.findUnique({
-//       where: { email },
-//     });
-//     if (!user) {
-//       throw new BadRequestException("User not found", ErrorCode.USER_NOT_FOUND);
-//     }
-//     if(!user.isVerified){
-//       throw new BadRequestException("User is not verified", ErrorCode.EMAIL_NOT_VERIFIED);
-//     }
-//     const passwordMatch = await comparePassword(password, user.password);
-//     if (!passwordMatch) {
-//       throw new UnauthorizedException(
-//         "Password does not match",
-//         ErrorCode.INVALID_CREDENTIALS
-//       );
-//     }
-//     const { accessToken, refreshToken } = await generateAccessandRefreshToken(
-//       user.id
-//     );
-//     const loggedInUser = await prisma.user.findUnique({
-//       where: { id: user.id },
-//       select: {
-//         id: true,
-//         fullName: true,
-//         email: true,
-//         isVerified: true,
-//         createdAt: true,
-//         updatedAt: true,
-//         role: true,
-//       },
-//     });
-//     const cookieOptions: CookieOptions = {
-//       httpOnly: true,
-//       secure: true,
-//       sameSite: "none",
-//     };
-//     res
-//       .status(200)
-//       .cookie("accessToken", accessToken, cookieOptions)
-//       .cookie("refreshToken", refreshToken, cookieOptions)
-//       .cookie("role", user.role.trim(), cookieOptions) // Set role in a cookie
-//       .json(
-//         new ApiResponse("User logged in successfully", {
-//           user: loggedInUser,
-//           accessToken,
-//           refreshToken,
-//         })
-//       );
-//   } catch (error) {
-//     next(error);
-//   }
-// };
+    const hashedPassword = await hashPassword(password);
 
-// export const logout = async (
-//   req: Request,
-//   res: Response,
-//   next: NextFunction
-// ) => {
-//   try {
-//     const user = (req as any).user;
+    const newUser = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
 
-//     if (user) {
-//       await prisma.user.update({
-//         where: { id: user.id },
-//         data: { refreshToken: null },
-//       });
-//     } else {
-//       throw new UnauthorizedException(
-//         "User not found",
-//         ErrorCode.UNAUTHORIZED_REQUEST
-//       );
-//     }
+    // Send OTP for email verification
+    try {
+      await createAndSendOtp(newUser.id, newUser.email, newUser.name);
+    } catch (error) {
+      // Rollback user creation if OTP sending fails
+      await prisma.user.delete({
+        where: { id: newUser.id },
+      });
+      throw new InternalException(
+        "Failed to send OTP email",
+        ErrorCode.INTERNAL_EXCEPTION,
+      );
+    }
 
-//     const cookieOptions: CookieOptions = {
-//       httpOnly: true,
-//       secure: true,
-//       sameSite: "none",
-//     };
+    res
+      .status(201)
+      .json(
+        new ApiResponse(
+          "User registered successfully. Please verify your email.",
+          newUser,
+        ),
+      );
+  } catch (error) {
+    next(error);
+  }
+};
 
-//     res
-//       .status(200)
-//       .clearCookie("accessToken", cookieOptions)
-//       .clearCookie("refreshToken", cookieOptions)
-//       .clearCookie("role", cookieOptions)
-//       .json(new ApiResponse("User logged out successfully", user));
-//   } catch (error) {
-//     next(error);
-//   }
-// };
+export const login = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      throw new BadRequestException("User not found", ErrorCode.USER_NOT_FOUND);
+    }
+
+    if (!user.emailVerified) {
+      throw new BadRequestException(
+        "Please verify your email first",
+        ErrorCode.EMAIL_NOT_VERIFIED,
+      );
+    }
+
+    const passwordMatch = await comparePassword(password, user.password!);
+    if (!passwordMatch) {
+      throw new BadRequestException(
+        "Invalid credentials",
+        ErrorCode.INVALID_CREDENTIALS,
+      );
+    }
+
+    const { accessToken, refreshToken } = await generateAccessandRefreshToken(
+      user.id,
+    );
+
+    const loggedInUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        emailVerified: true,
+        createdAt: true,
+        updatedAt: true,
+        role: true,
+      },
+    });
+
+    const cookieOptions: CookieOptions = {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+    };
+
+    res
+      .status(200)
+      .cookie("accessToken", accessToken, cookieOptions)
+      .cookie("refreshToken", refreshToken, cookieOptions)
+      .json(
+        new ApiResponse("User logged in successfully", {
+          user: loggedInUser,
+          accessToken,
+          refreshToken,
+        }),
+      );
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const logout = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const user = (req as any).user;
+
+    if (user) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { refreshToken: null },
+      });
+    } else {
+      throw new UnauthorizedException(
+        "User not found",
+        ErrorCode.UNAUTHORIZED_REQUEST,
+      );
+    }
+
+    const cookieOptions: CookieOptions = {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+    };
+
+    res
+      .status(200)
+      .clearCookie("accessToken", cookieOptions)
+      .clearCookie("refreshToken", cookieOptions)
+      .json(new ApiResponse("User logged out successfully", user));
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const verifyOtp = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { email, otp } = req.body;
@@ -211,7 +259,7 @@ export const verifyOtp = async (
     if (!email || !otp) {
       throw new BadRequestException(
         "Email and OTP are required",
-        ErrorCode.NOT_FOUND
+        ErrorCode.NOT_FOUND,
       );
     }
 
@@ -232,7 +280,7 @@ export const verifyOtp = async (
     if (!otpRecord) {
       throw new BadRequestException(
         "Invalid or expired OTP",
-        ErrorCode.INVALID_OTP
+        ErrorCode.INVALID_OTP,
       );
     }
 
@@ -244,7 +292,7 @@ export const verifyOtp = async (
       });
       throw new BadRequestException(
         "Too many failed attempts. Please request a new OTP.",
-        ErrorCode.RATE_LIMIT_EXCEEDED
+        ErrorCode.RATE_LIMIT_EXCEEDED,
       );
     }
 
@@ -260,12 +308,12 @@ export const verifyOtp = async (
 
       throw new BadRequestException(
         `Invalid OTP. ${5 - otpRecord.attempts - 1} attempts remaining.`,
-        ErrorCode.INVALID_OTP
+        ErrorCode.INVALID_OTP,
       );
     }
 
     // Use transaction for atomic operations
-    await prisma.$transaction(
+    const updatedUser = await prisma.$transaction(
       async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
         // Mark OTP as verified
         await tx.otp.update({
@@ -274,7 +322,7 @@ export const verifyOtp = async (
         });
 
         // Update user as verified
-        await tx.user.update({
+        const user = await tx.user.update({
           where: { id: otpRecord.userId },
           data: {
             emailVerified: true,
@@ -289,12 +337,16 @@ export const verifyOtp = async (
             id: { not: otpRecord.id },
           },
         });
-      }
+
+        return user;
+      },
     );
 
-    res
-      .status(200)
-      .json(new ApiResponse("Email verified successfully", { verified: true }));
+    res.status(200).json(
+      new ApiResponse("Email verified successfully. Please sign in.", {
+        verified: true,
+      }),
+    );
   } catch (error) {
     next(error);
   }
@@ -304,7 +356,7 @@ export const verifyOtp = async (
 export const resendOtp = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { email } = req.body;
@@ -346,7 +398,7 @@ export const resendOtp = async (
     if (recentOtp) {
       throw new BadRequestException(
         "Please wait 1 minute before requesting another OTP",
-        ErrorCode.RATE_LIMIT_EXCEEDED
+        ErrorCode.RATE_LIMIT_EXCEEDED,
       );
     }
 
@@ -357,7 +409,7 @@ export const resendOtp = async (
       console.error("Failed to send OTP:", emailError);
       throw new InternalException(
         "Failed to send verification email",
-        ErrorCode.EMAIL_SEND_FAILED
+        ErrorCode.EMAIL_SEND_FAILED,
       );
     }
 
@@ -365,7 +417,7 @@ export const resendOtp = async (
       new ApiResponse("OTP sent successfully", {
         email: user.email,
         expiresIn: "10 minutes",
-      })
+      }),
     );
   } catch (error) {
     next(error);
