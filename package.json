@@ -35,6 +35,8 @@
     "googleapis": "^144.0.0",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^7.0.12",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
     "tsx": "^4.21.0",
     "zod": "^4.2.1"
   }
