@@ -9,6 +9,7 @@ import jwt, { JwtPayload } from "jsonwebtoken";
 import { generateAccessandRefreshToken } from "../controllers/auth.controller";
 import { comparePassword } from "../utils/hash";
 import { auth } from "../lib/auth";
+import { fromNodeHeaders } from "better-auth/node";
 
 interface TokenPayload extends JwtPayload {
   data: {
@@ -21,12 +22,12 @@ interface TokenPayload extends JwtPayload {
 export const verifyUser = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     // 1. Check for Better Auth Session first
     const session = await auth.api.getSession({
-      headers: new Headers(req.headers as any),
+      headers: fromNodeHeaders(req.headers),
     });
 
     if (session) {
@@ -48,14 +49,14 @@ export const verifyUser = async (
     if (!accessToken) {
       throw new UnauthorizedException(
         "Unauthorized. No access token provided",
-        ErrorCode.UNAUTHORIZED_REQUEST
+        ErrorCode.UNAUTHORIZED_REQUEST,
       );
     }
 
     try {
       const decoded = jwt.verify(
         accessToken,
-        process.env.ACCESS_TOKEN_SECRET!
+        process.env.ACCESS_TOKEN_SECRET!,
       ) as TokenPayload;
 
       const user = await prisma.user.findUnique({
@@ -71,7 +72,7 @@ export const verifyUser = async (
       if (!user) {
         throw new UnauthorizedException(
           "User not found",
-          ErrorCode.UNAUTHORIZED_REQUEST
+          ErrorCode.UNAUTHORIZED_REQUEST,
         );
       }
 
@@ -81,7 +82,7 @@ export const verifyUser = async (
       if (error.name !== "TokenExpiredError") {
         throw new UnauthorizedException(
           "Invalid access token",
-          ErrorCode.UNAUTHORIZED_REQUEST
+          ErrorCode.UNAUTHORIZED_REQUEST,
         );
       }
     }
@@ -91,13 +92,13 @@ export const verifyUser = async (
     if (!refreshToken) {
       throw new UnauthorizedException(
         "Session expired. Please login again.",
-        ErrorCode.UNAUTHORIZED_REQUEST
+        ErrorCode.UNAUTHORIZED_REQUEST,
       );
     }
 
     const decodedRefresh = jwt.verify(
       refreshToken,
-      process.env.REFRESH_TOKEN_SECRET!
+      process.env.REFRESH_TOKEN_SECRET!,
     ) as TokenPayload;
 
     const user = await prisma.user.findUnique({
@@ -107,19 +108,19 @@ export const verifyUser = async (
     if (!user || !user.refreshToken) {
       throw new UnauthorizedException(
         "Invalid refresh token",
-        ErrorCode.UNAUTHORIZED_REQUEST
+        ErrorCode.UNAUTHORIZED_REQUEST,
       );
     }
 
     const isValidRefreshToken = await comparePassword(
       refreshToken,
-      user.refreshToken
+      user.refreshToken,
     );
 
     if (!isValidRefreshToken) {
       throw new UnauthorizedException(
         "Invalid refresh token",
-        ErrorCode.UNAUTHORIZED_REQUEST
+        ErrorCode.UNAUTHORIZED_REQUEST,
       );
     }
 
