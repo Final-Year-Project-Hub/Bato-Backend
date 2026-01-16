@@ -1,14 +1,58 @@
-import { Request, Response } from "express";
+﻿import { Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
+import { progressService } from "../services/progress.service";
 import dotenv from "dotenv";
+import {
+  GenerateRoadmapSchema,
+  GetRoadmapsQuerySchema,
+  RoadmapIdParamSchema,
+} from "../validation/roadmap.validations";
+import { parseAndValidateRoadmap } from "../utils/json-parser";
+import {
+  UserContext,
+  FastAPIStreamPayload,
+  RoadmapData,
+} from "../types/roadmap.types";
+import {
+  BadRequestException,
+  ErrorCode,
+  InternalException,
+} from "../utils/root";
+
 dotenv.config();
 
+// Constants
+const DEFAULT_FASTAPI_URL = "http://127.0.0.1:8000";
+const DEFAULT_ROADMAP_LIMIT = 10;
+const MAX_ROADMAP_LIMIT = 100;
+
+/**
+ * Generates a roadmap using streaming SSE from FastAPI
+ * @route POST /api/roadmap/stream
+ */
 export async function generateRoadmapStream(req: Request, res: Response) {
-  const { message, conversation_history } = req.body;
-  const user = (req as any).user;
+  const user = req.user;
+  if (!user) {
+    throw new BadRequestException(
+      "User not authenticated",
+      ErrorCode.UNAUTHORIZED_REQUEST
+    );
+  }
 
   try {
-    console.log(`[Roadmap-Stream] Request for: ${user.email}`);
+    // Parse request body first
+    const {
+      message,
+      conversation_history = [],
+      chatSessionId,
+      strictMode,
+    } = req.body;
+    // Validate request body
+    GenerateRoadmapSchema.parse(req.body); // Still validate the full body
+
+    console.log(
+      `[Roadmap-Stream] Request for: ${user.email}, chatSessionId: ${chatSessionId}`
+    );
 
     // Prepare headers for SSE
     res.setHeader("Content-Type", "text/event-stream");
@@ -16,33 +60,52 @@ export async function generateRoadmapStream(req: Request, res: Response) {
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
 
-    // Get user context (reused logic)
+    // User context for personalization
+    const userContext: UserContext = {
+      user_id: user.id,
+      user_name: user.name || user.email.split("@")[0],
+      known_technologies: [], // Fetched below
+    };
+
+    // Get user context (original logic for knownTech)
     const knownTech = await prisma.userKnownTechnology.findMany({
       where: { userId: user.id },
       select: { technology: true },
     });
+    userContext.known_technologies = knownTech.map(
+      (t: { technology: string }) => t.technology
+    );
 
-    // Minimal user context for stream
-    const userContext = {
-      user_id: user.id,
-      user_name: user.fullName || user.email.split("@")[0],
-      known_technologies: knownTech.map((t) => t.technology),
-    };
+    // Validate environment variables
+    const fastApiUrl = process.env.FASTAPI_URL || DEFAULT_FASTAPI_URL;
+    const fastApiKey = process.env.FASTAPI_API_KEY;
 
-    // Call FastAPI Stream Endpoint
-    const fastApiUrl = process.env.FASTAPI_URL || "http://127.0.0.1:8000";
+    if (!fastApiKey) {
+      throw new InternalException(
+        "FASTAPI_API_KEY not configured",
+        ErrorCode.INTERNAL_EXCEPTION
+      );
+    }
+
     const endpoint = `${fastApiUrl}/api/v1/chat/stream`;
 
     console.log(`[Roadmap-Stream] Connecting to FastAPI: ${endpoint}`);
 
+    const payload: FastAPIStreamPayload = {
+      message,
+      conversation_history,
+      user_context: userContext,
+      strict_mode: strictMode,
+    };
+    console.log(`[Roadmap-Stream] Payload:`, JSON.stringify(payload, null, 2));
+
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message,
-        conversation_history: conversation_history || [],
-        user_context: userContext,
-      }),
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": fastApiKey,
+      },
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok || !response.body) {
@@ -56,6 +119,7 @@ export async function generateRoadmapStream(req: Request, res: Response) {
 
     let sseBuffer = "";
     let fullContent = "";
+    let hasError = false; // Track if error occurred
 
     try {
       while (true) {
@@ -69,96 +133,115 @@ export async function generateRoadmapStream(req: Request, res: Response) {
 
         chunkCount++;
         const chunk = decoder.decode(value, { stream: true });
-        // Log first few chunks to verify content
+
+        // Log first few chunks for debug
         if (chunkCount <= 3) {
           console.log(
-            `[Roadmap-Stream] Chunk ${chunkCount}:`,
-            chunk.substring(0, 50)
+            `[Roadmap-Stream] Chunk ${chunkCount} (len=${chunk.length})`
           );
         }
-        res.write(chunk);
 
-        // Accumulate tokens for saving
+        // Accumulate chunks in buffer to handle split lines
         sseBuffer += chunk;
         const lines = sseBuffer.split("\n");
+        // Keep the last partial line in the buffer
         sseBuffer = lines.pop() || "";
 
         for (const line of lines) {
           if (!line.trim()) continue;
+
+          // Debug: Log first few lines to see format
+          if (chunkCount <= 5) {
+            console.log(
+              `[Roadmap-Stream] Line ${chunkCount}:`,
+              line.substring(0, 100)
+            );
+          }
+
+          // Forward as SSE event to client (add data: prefix for proper SSE format)
+          res.write(`data: ${line}\n\n`);
+
+          // Process for DB saving - parse JSON directly
           try {
             const eventData = JSON.parse(line);
+
             if (eventData.event === "token") {
               fullContent += eventData.data;
+            } else if (eventData.event === "error") {
+              console.error(
+                "[Roadmap-Stream] Backend reported error:",
+                eventData.data
+              );
+              hasError = true;
             }
           } catch (e) {
-            // Ignore parse errors for partial/interleaved lines
+            // Ignore parse errors for DB saving, but we still sent the line to client
+            if (chunkCount <= 5) {
+              console.warn("[Roadmap-Stream] JSON parse error:", e);
+            }
           }
+        }
+      }
+
+      // Process any remaining buffer content
+      if (sseBuffer.trim()) {
+        const line = sseBuffer;
+        res.write(`data: ${line}\n\n`);
+        try {
+          const eventData = JSON.parse(line);
+          if (eventData.event === "token") {
+            fullContent += eventData.data;
+          }
+        } catch (e) {
+          console.warn("[Roadmap-Stream] JSON parse error (final):", e);
         }
       }
 
       // Stream finished, try to save
       try {
+        if (hasError) {
+          console.log(
+            "[Roadmap-Stream] Stream ended with error. Skipping DB save."
+          );
+          res.end();
+          return;
+        }
+
         console.log(
           `[Roadmap-Stream] Parsing full content (${fullContent.length} chars)`
         );
 
-        // Helper to attempt JSON repair
-        const tryParseJSON = (str: string) => {
-          try {
-            return JSON.parse(str);
-          } catch (e) {
-            // Attempt 2: Find last closing brace
-            const lastBrace = str.lastIndexOf("}");
-            if (lastBrace !== -1) {
-              const truncated = str.substring(0, lastBrace + 1);
-              try {
-                return JSON.parse(truncated);
-              } catch (e2) {
-                // Attempt 3: Aggressive trailing commas removal
-                // Remove trailing commas before closing braces/brackets
-                const noTrailing = truncated
-                  .replace(/,(\s*[}\]])/g, "$1")
-                  .replace(/,(\s*)$/, "$1"); // End of string comma
-                try {
-                  return JSON.parse(noTrailing);
-                } catch (e3) {
-                  // Last resort: just try parsing the original without trailing commas
-                  const noTrailingOrig = str
-                    .replace(/,(\s*[}\]])/g, "$1")
-                    .replace(/,(\s*)$/, "$1");
-                  return JSON.parse(noTrailingOrig);
-                }
-              }
-            }
-            throw e;
-          }
-        };
+        // Parse and validate roadmap data using utility
+        const roadmapData = parseAndValidateRoadmap(fullContent);
 
-        // Clean Markdown if present
-        let jsonStr = fullContent.trim();
-        if (jsonStr.startsWith("```json")) jsonStr = jsonStr.slice(7);
-        if (jsonStr.startsWith("```")) jsonStr = jsonStr.slice(3);
-        if (jsonStr.endsWith("```")) jsonStr = jsonStr.slice(0, -3);
-
-        const roadmapData = tryParseJSON(jsonStr.trim());
-
-        if (roadmapData.phases && Array.isArray(roadmapData.phases)) {
+        if (roadmapData) {
           const savedRoadmap = await prisma.roadmap.create({
             data: {
               userId: user.id,
+              chatSessionId: chatSessionId, // Use extracted variable
               title: roadmapData.goal || "Untitled Roadmap",
               goal: roadmapData.goal,
+              intent: roadmapData.intent || "learn",
               proficiency: roadmapData.proficiency || "beginner",
-              roadmapData: roadmapData,
+              roadmapData: roadmapData as any,
               message: message,
             },
           });
+
           console.log(
             `[Roadmap-Stream] ✅ Saved roadmap to DB: ${savedRoadmap.id}`
           );
+
+          // Emit the roadmap ID so client can link it
+          res.write(
+            `data: ${JSON.stringify({
+              event: "roadmap_created",
+              data: savedRoadmap.id,
+            })}\n\n`
+          );
         } else {
-          console.log(
-            "[Roadmap-Stream] ⚠️ Output validation failed (no phases), not saving."
+          console.warn(
+            "[Roadmap-Stream] ⚠️ Output validation failed (no valid phases), not saving."
           );
         }
       } catch (parseError) {
@@ -189,14 +272,30 @@ export async function generateRoadmapStream(req: Request, res: Response) {
 
 /**
  * Get user's roadmaps
+ * @route GET /api/roadmap
  */
 export async function getUserRoadmaps(req: Request, res: Response) {
-  const user = (req as any).user;
-  const limit = parseInt(req.query.limit as string) || 10;
+  const user = req.user;
+  if (!user) {
+    throw new BadRequestException(
+      "User not authenticated",
+      ErrorCode.UNAUTHORIZED_REQUEST
+    );
+  }
+
+  // Validate query parameters
+  const validatedQuery = GetRoadmapsQuerySchema.parse(req.query);
+  const limit = Math.min(validatedQuery.limit, MAX_ROADMAP_LIMIT);
+  const { isSelected } = validatedQuery;
+
+  const where: any = { userId: user.id };
+  if (isSelected !== undefined) {
+    where.isSelected = isSelected;
+  }
 
   try {
     const roadmaps = await prisma.roadmap.findMany({
-      where: { userId: user.id },
+      where,
       orderBy: { createdAt: "desc" },
       take: limit,
       select: {
@@ -205,6 +304,7 @@ export async function getUserRoadmaps(req: Request, res: Response) {
         goal: true,
         proficiency: true,
         createdAt: true,
+        isSelected: true,
       },
     });
 
@@ -217,10 +317,20 @@ export async function getUserRoadmaps(req: Request, res: Response) {
 
 /**
  * Get roadmap by ID
+ * @route GET /api/roadmap/:id
  */
 export async function getRoadmapById(req: Request, res: Response) {
-  const user = (req as any).user;
-  const { id } = req.params;
+  const user = req.user;
+  if (!user) {
+    throw new BadRequestException(
+      "User not authenticated",
+      ErrorCode.UNAUTHORIZED_REQUEST
+    );
+  }
+
+  // Validate roadmap ID parameter
+  const validatedParams = RoadmapIdParamSchema.parse(req.params);
+  const { id } = validatedParams;
 
   try {
     const roadmap = await prisma.roadmap.findFirst({
@@ -241,10 +351,20 @@ export async function getRoadmapById(req: Request, res: Response) {
   }
 }
 
-
-export async function healthCheck(req:Request, res: Response) {
+/**
+ * Health check endpoint - verifies FastAPI connectivity
+ * @route GET /api/roadmap/health
+ */
+export async function healthCheck(req: Request, res: Response) {
   try {
     const fastApiUrl = process.env.FASTAPI_URL;
+    if (!fastApiUrl) {
+      throw new InternalException(
+        "FastAPI URL not configured",
+        ErrorCode.INTERNAL_EXCEPTION
+      );
+    }
+
     const response = await fetch(`${fastApiUrl}/health`);
 
     if (response.ok) {
@@ -274,14 +394,34 @@ export async function healthCheck(req:Request, res: Response) {
   }
 }
 
-
-export async function ingestDocument(req:Request, res:Response) {
+/**
+ * Trigger document ingestion in FastAPI
+ * @route POST /api/roadmap/ingest
+ */
+export async function ingestDocument(req: Request, res: Response) {
   try {
-    const fastApiUrl = process.env.FASTAPI_URL ;
+    const fastApiUrl = process.env.FASTAPI_URL;
+    const fastApiKey = process.env.FASTAPI_API_KEY;
+
+    if (!fastApiUrl) {
+      throw new InternalException(
+        "FastAPI URL not configured",
+        ErrorCode.INTERNAL_EXCEPTION
+      );
+    }
+
+    if (!fastApiKey) {
+      throw new InternalException(
+        "FASTAPI_API_KEY not configured",
+        ErrorCode.INTERNAL_EXCEPTION
+      );
+    }
+
     const response = await fetch(`${fastApiUrl}/api/v1/ingest`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "X-API-Key": fastApiKey,
       },
     });
 
@@ -300,36 +440,47 @@ export async function ingestDocument(req:Request, res:Response) {
     });
   }
 }
+/**
+ * Select a roadmap as the user's active roadmap
+ * @route POST /api/roadmap/:id/select
+ */
+export async function selectRoadmap(req: Request, res: Response) {
+  const user = req.user;
+  if (!user) {
+    throw new BadRequestException(
+      "User not authenticated",
+      ErrorCode.UNAUTHORIZED_REQUEST
+    );
+  }
 
-// export const forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
-//   try {
-//     const { email } = LoginSchema.parse(req.body);
-//     const user = await prisma.user.findUnique({
-//       where: { email },
-//     });
+  const { id } = RoadmapIdParamSchema.parse(req.params);
 
-//     if (!user) {
-//       throw new BadRequestException("User not found", ErrorCode.USER_NOT_FOUND);
-//     }
+  try {
+    const roadmap = await prisma.roadmap.findFirst({
+      where: { id, userId: user.id },
+    });
 
-//     const otp = generateOtp();
-//     const otpHash = await hashPassword(otp);
-//     const otpExpiresAt = new Date(Date.now() + 2 * 60 * 1000);
+    if (!roadmap) {
+      return res.status(404).json({ error: "Roadmap not found" });
+    }
 
-//     await prisma.otp.create({
-//       data: {
-//         userId: user.id,
-//         otp: otpHash,
-//         expiresAt: otpExpiresAt,
-//         purpose: OtpPurpose.FORGOT_PASSWORD,
-//         type: "EMAIL",
-//       },
-//     });
+    // Removed single-active constraint as per user request
+    // Allow multiple roadmaps to be selected simultaneously
 
-//     await sendEmail(email, otp, OtpPurpose.FORGOT_PASSWORD);
+    const selectedRoadmap = await prisma.roadmap.update({
+      where: { id },
+      data: { isSelected: true },
+    });
 
-//     res.status(200).json(new ApiResponse("Password reset OTP sent to email", null));
-//   } catch (error) {
-//     next(error);
-//   }
-// };
+    // Initialize progress tracking when selected
+    await progressService.initializeProgress(id);
+
+    res.json({
+      success: true,
+      data: selectedRoadmap,
+    });
+  } catch (error: any) {
+    console.error("[Roadmap] Error selecting roadmap:", error);
+    res.status(500).json({ error: "Failed to select roadmap" });
+  }
+}

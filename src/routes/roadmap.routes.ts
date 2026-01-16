@@ -1,7 +1,9 @@
 import { Router } from "express";
 import {
+  generateRoadmapStream,
   getUserRoadmaps,
   getRoadmapById,
+  selectRoadmap,
   healthCheck,
   ingestDocument,
 } from "../controllers/roadmap.controller";
@@ -13,23 +15,49 @@ const router: Router = Router();
 // All routes require authentication
 router.use(verifyUser);
 
+// ============================================
+// Utility Routes (must come before /:id)
+// ============================================
 
-// Streaming generation endpoint
-import { generateRoadmapStream } from "../controllers/roadmap.controller";
+/**
+ * Health check endpoint - verifies FastAPI connectivity
+ * @route GET /api/roadmap/health
+ */
+router.get("/health", errorHandler(healthCheck));
+
+/**
+ * Document ingestion endpoint - uploads documents to vector DB via FastAPI
+ * @route POST /api/roadmap/ingest
+ */
+router.post("/ingest", errorHandler(ingestDocument));
+
+/**
+ * Streaming roadmap generation endpoint
+ * @route POST /api/roadmap/stream
+ */
 router.post("/stream", errorHandler(generateRoadmapStream));
 
-// Get user's roadmaps
+// ============================================
+// CRUD Routes
+// ============================================
+
+/**
+ * Select a roadmap as active
+ * @route POST /api/roadmap/:id/select
+ */
+router.post("/:id/select", errorHandler(selectRoadmap));
+
+/**
+ * Get user's roadmaps
+ * @route GET /api/roadmap
+ */
 router.get("/", errorHandler(getUserRoadmaps));
 
-// Get specific roadmap by ID
+/**
+ * Get specific roadmap by ID
+ * @route GET /api/roadmap/:id
+ * Note: This must come AFTER specific routes like /health, /ingest, /stream
+ */
 router.get("/:id", errorHandler(getRoadmapById));
-
-
-// Health check endpoint:Just to check if the AI backend is reachable or not.
-router.get("/health",healthCheck );
-
-// Document ingestion endpoint:TO upload document into vector DB via FastAPI
-router.post("/api/v1/ingest",ingestDocument );
-
 
 export default router;

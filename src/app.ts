@@ -3,25 +3,32 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import authRoutes from "./routes/auth.routes";
 import roadmapRoutes from "./routes/roadmap.routes";
+import chatRoutes from "./routes/chat.routes";
+import progressRoutes from "./routes/progress.routes";
 import { errorMiddleware } from "./middlewares/error";
 import { errorHandler } from "./middlewares/error-handler";
 import { auth } from "./lib/auth";
 import { toNodeHandler } from "better-auth/node";
 
 const app: Express = express();
-const allowedOrigins = [
-  "http://localhost:3000",
-  "http://localhost:5173",
-  
-].filter(Boolean) as string[];
+
+// Parse allowed origins from environment variable
+const allowedOrigins = (
+  process.env.ALLOWED_ORIGINS || "http://localhost:3000,http://localhost:5173"
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, postman)
-      if (!origin) return callback(null, true);
+      // Allow requests with no origin (like mobile apps, curl, postman) only in development
+      if (!origin && process.env.NODE_ENV === "development") {
+        return callback(null, true);
+      }
 
-      if (allowedOrigins.indexOf(origin) === -1) {
+      if (!origin || allowedOrigins.indexOf(origin) === -1) {
         const msg =
           "The CORS policy for this site does not allow access from the specified Origin.";
         return callback(new Error(msg), false);
@@ -40,6 +47,8 @@ app.use(cookieParser());
 // Routes
 app.use("/auth", authRoutes);
 app.use("/api/roadmap", roadmapRoutes);
+app.use("/api/chats", chatRoutes);
+app.use("/api/roadmap/:roadmapId/progress", progressRoutes);
 
 // Root route
 app.get("/", (req, res) => {
@@ -54,7 +63,7 @@ app.get("/", (req, res) => {
   });
 });
 
-
+// Error handling middleware must be last
 app.use(errorMiddleware);
 
 export default app;

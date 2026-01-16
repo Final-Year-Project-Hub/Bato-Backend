@@ -1,4 +1,11 @@
-import { BadRequestException, InternalException, HttpException, UnauthorizedException, UnprocessableEntityException, ErrorCode } from "../utils/root";
+import {
+  BadRequestException,
+  InternalException,
+  HttpException,
+  UnauthorizedException,
+  UnprocessableEntityException,
+  ErrorCode,
+} from "../utils/root";
 import { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 
@@ -11,9 +18,8 @@ export const errorHandler = (method: Function) => {
 
       if (error instanceof HttpException) {
         exception = error;
-      } 
-      else if (error instanceof ZodError) {
-        const fieldErrors = error.issues.map(issue => ({
+      } else if (error instanceof ZodError) {
+        const fieldErrors = error.issues.map((issue) => ({
           field: issue.path.join("."),
           message: issue.message,
         }));
@@ -23,28 +29,35 @@ export const errorHandler = (method: Function) => {
           ErrorCode.UNPROCESSABLE_ENTITY,
           fieldErrors
         );
-      } 
-      else if (error instanceof Error) {
+      } else if (error instanceof Error) {
         exception = new InternalException(
           "An unexpected error occurred",
           ErrorCode.INTERNAL_EXCEPTION,
           error.message
         );
-      }
-      else {
+      } else {
         exception = new InternalException(
           "Unknown Error",
           ErrorCode.INTERNAL_EXCEPTION,
           error
         );
       }
-      
-      console.error("[ErrorHandler]", {
-        message: exception.message,
-        errorCode: exception.errorCode,
-        errors: exception.errors,
-        stack: error instanceof Error ? error.stack : undefined
-      });
+
+      // Log errors with environment-aware detail level
+      if (process.env.NODE_ENV === "development") {
+        console.error("[ErrorHandler]", {
+          message: exception.message,
+          errorCode: exception.errorCode,
+          errors: exception.errors,
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+      } else {
+        // In production, log less detail to avoid leaking sensitive info
+        console.error("[ErrorHandler]", {
+          message: exception.message,
+          errorCode: exception.errorCode,
+        });
+      }
 
       next(exception);
     }

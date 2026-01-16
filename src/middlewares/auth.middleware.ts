@@ -1,5 +1,9 @@
 import { NextFunction, Request, Response } from "express";
-import { UnauthorizedException, ErrorCode, InternalException } from "../utils/root";
+import {
+  UnauthorizedException,
+  ErrorCode,
+  InternalException,
+} from "../utils/root";
 import { prisma } from "../lib/prisma.js";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import { generateAccessandRefreshToken } from "../controllers/auth.controller";
@@ -100,17 +104,27 @@ export const verifyUser = async (
       where: { id: decodedRefresh.data.id },
     });
 
-    if (!user || !(await comparePassword(refreshToken, user.refreshToken as string))) {
+    if (!user || !user.refreshToken) {
       throw new UnauthorizedException(
         "Invalid refresh token",
         ErrorCode.UNAUTHORIZED_REQUEST
       );
     }
 
-    const {
-      accessToken: newAccessToken,
-      refreshToken: newRefreshToken,
-    } = await generateAccessandRefreshToken(user.id);
+    const isValidRefreshToken = await comparePassword(
+      refreshToken,
+      user.refreshToken
+    );
+
+    if (!isValidRefreshToken) {
+      throw new UnauthorizedException(
+        "Invalid refresh token",
+        ErrorCode.UNAUTHORIZED_REQUEST
+      );
+    }
+
+    const { accessToken: newAccessToken, refreshToken: newRefreshToken } =
+      await generateAccessandRefreshToken(user.id);
 
     const cookieOptions = {
       httpOnly: true,

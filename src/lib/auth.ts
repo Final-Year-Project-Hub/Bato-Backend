@@ -3,7 +3,6 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma";
 import { createAndSendOtp } from "../utils/otp";
 
-
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: "postgresql",
@@ -16,8 +15,8 @@ export const auth = betterAuth({
 
   emailVerification: {
     sendVerificationEmail: async ({ user }) => {
-        try {
-          console.log("Attempting to send OTP to", user.email);
+      try {
+        console.log("Attempting to send OTP to", user.email);
         // Send 6-digit OTP instead of verification link
         await createAndSendOtp(user.id, user.email, user.name);
         console.log("Successfully sent OTP to", user.email);
@@ -36,11 +35,12 @@ export const auth = betterAuth({
     "http://localhost:4000",
   ],
   advanced: {
-    disableOriginCheck: true, // Allow requests without Origin header (e.g. from Postman)
-    disableCSRFCheck: true, // Explicitly disable CSRF check to match disableOriginCheck and resolve deprecation warning
+    // Only disable security checks in development
+    disableOriginCheck: process.env.NODE_ENV === "development",
+    disableCSRFCheck: process.env.NODE_ENV === "development",
   },
   logger: {
-    level: "debug",
+    level: process.env.NODE_ENV === "development" ? "debug" : "error",
   },
 });
 

@@ -1,20 +1,47 @@
 import nodemailer from "nodemailer";
 import { hashPassword } from "./hash";
-import {prisma} from "../lib/prisma.js";
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || "587"),
-  secure: false, // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-  connectionTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000, // 10 seconds
-  tls: {
-    rejectUnauthorized: false, // Avoid disconnection due to SSL certificate issues in some environments
-  },
-});
+import { prisma } from "../lib/prisma.js";
+
+// Validate OAuth2 configuration
+const validateOAuth2Config = () => {
+  const required = [
+    "GMAIL_USER",
+    "GMAIL_CLIENT_ID",
+    "GMAIL_CLIENT_SECRET",
+    "GMAIL_REFRESH_TOKEN",
+  ];
+  const missing = required.filter((key) => !process.env[key]);
+
+  if (missing.length > 0) {
+    throw new Error(`Missing OAuth2 configuration: ${missing.join(", ")}`);
+  }
+};
+
+// Factory function for transporter with OAuth2
+const createEmailTransporter = () => {
+  validateOAuth2Config();
+
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      type: "OAuth2",
+      user: process.env.GMAIL_USER,
+      clientId: process.env.GMAIL_CLIENT_ID,
+      clientSecret: process.env.GMAIL_CLIENT_SECRET,
+      refreshToken: process.env.GMAIL_REFRESH_TOKEN,
+    },
+  });
+};
+
+// Lazy-initialized singleton
+let transporter: ReturnType<typeof createEmailTransporter> | null = null;
+
+const getTransporter = () => {
+  if (!transporter) {
+    transporter = createEmailTransporter();
+  }
+  return transporter;
+};
 
 export const generateOtp = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -25,8 +52,9 @@ export const sendOtpEmail = async (
   otp: string,
   name?: string | null
 ): Promise<void> => {
+  const transporter = getTransporter();
   await transporter.sendMail({
-    from: process.env.SMTP_USER,
+    from: process.env.GMAIL_USER,
     to: email,
     subject: "Your Verification Code",
     html: `
@@ -69,7 +97,7 @@ export const sendOtpEmail = async (
         <body>
           <div class="container">
             <h1>Email Verification</h1>
-            <p>Hi ${ name || 'there'},</p>
+            <p>Hi ${name || "there"},</p>
             <p>Your verification code is:</p>
             
             <div class="otp-box">
@@ -99,27 +127,29 @@ export const createAndSendOtp = async (
   const otpHash = await hashPassword(otp);
   const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-  // Store in database
-  await prisma.$transaction(async (tx) => {
-    // Delete old OTPs for this user
-    await tx.otp.deleteMany({
-      where: { userId },
-    });
+  // Store in database using transaction
+  await prisma.$transaction(
+    async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
+      // Delete old OTPs for this user
+      await tx.otp.deleteMany({
+        where: { userId },
+      });
 
-    // Create new OTP
-    await tx.otp.create({
-      data: {
-        userId,
-        email,
-        otp: otpHash,
-        expiresAt: otpExpiresAt,
-        verified: false,
-        attempts: 0,
-        purpose: "EMAIL_VERIFICATION",
-        type: "EMAIL",
-      },
-    });
-  });
+      // Create new OTP
+      await tx.otp.create({
+        data: {
+          userId,
+          email,
+          otp: otpHash,
+          expiresAt: otpExpiresAt,
+          verified: false,
+          attempts: 0,
+          purpose: "EMAIL_VERIFICATION",
+          type: "EMAIL",
+        },
+      });
+    }
+  );
 
   // Send email
   await sendOtpEmail(email, otp, name);
