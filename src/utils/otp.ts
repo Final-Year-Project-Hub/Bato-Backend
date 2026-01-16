@@ -42,8 +42,11 @@ const createEmailTransporter = async (): Promise<
 
     const transportConfig: SMTPTransport.Options = {
       host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
+      port: 587, // Use port 587 instead of 465 for better cloud platform compatibility
+      secure: false, // false for port 587, true for port 465
+      requireTLS: true, // Force TLS
+      connectionTimeout: 10000, // 10 seconds
+      socketTimeout: 10000, // 10 seconds
       auth: {
         type: "OAuth2",
         user: process.env.GMAIL_USER,
