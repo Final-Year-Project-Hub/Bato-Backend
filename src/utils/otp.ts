@@ -22,7 +22,9 @@ const createEmailTransporter = () => {
   validateOAuth2Config();
 
   return nodemailer.createTransport({
-    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false, // use STARTTLS
     auth: {
       type: "OAuth2",
       user: process.env.GMAIL_USER,
