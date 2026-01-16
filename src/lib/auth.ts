@@ -33,7 +33,26 @@ export const auth = betterAuth({
     "http://localhost:3000",
     "http://localhost:5173",
     "http://localhost:4000",
+    "https://frontend-test-seven-xi.vercel.app",
+    "https://frontend-test-kuber-pathaks-projects.vercel.app",
   ],
+  session: {
+    cookieCache: {
+      enabled: true,
+      maxAge: 60 * 5, // 5 minutes
+    },
+  },
+  cookies: {
+    sessionToken: {
+      name: "better-auth.session_token",
+      options: {
+        httpOnly: true,
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+      },
+    },
+  },
   advanced: {
     // Only disable security checks in development
     disableOriginCheck: process.env.NODE_ENV === "development",
