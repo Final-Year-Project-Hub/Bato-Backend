@@ -77,8 +77,7 @@ app.get("/", (req, res) => {
     version: "1.0.0",
     documentation: "http://localhost:4000/api-docs",
     endpoints: {
-      betterAuth: "/api/auth/ (signup, signin, signout,email)",
-      customAuth: "/auth (verify-otp, resend-otp)",
+      customAuth: "/auth (signup, login, logout, verify-otp, resend-otp)",
       roadmap: "/api/roadmap",
       chat: "/api/chats",
       progress: "/api/roadmap/:roadmapId/progress",
