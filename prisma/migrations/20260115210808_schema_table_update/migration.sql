@@ -10,7 +10,6 @@
 -- AlterEnum
 BEGIN;
 CREATE TYPE "OtpPurpose_new" AS ENUM ('EMAIL_VERIFICATION', 'FORGOT_PASSWORD');
-ALTER TABLE "otps" ALTER COLUMN "purpose" TYPE "OtpPurpose_new" USING ("purpose"::text::"OtpPurpose_new");
 ALTER TYPE "OtpPurpose" RENAME TO "OtpPurpose_old";
 ALTER TYPE "OtpPurpose_new" RENAME TO "OtpPurpose";
 DROP TYPE "public"."OtpPurpose_old";
