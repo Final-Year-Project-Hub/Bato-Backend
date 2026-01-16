@@ -11,6 +11,7 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,
+    autoSignIn:true,
   },
 
   emailVerification: {
@@ -36,22 +37,14 @@ export const auth = betterAuth({
     "https://frontend-test-seven-xi.vercel.app",
     "https://frontend-test-kuber-pathaks-projects.vercel.app",
   ],
-  session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 days
-    updateAge: 60 * 60 * 24, // 1 day
-    cookieCache: {
-      enabled: true,
-      maxAge: 5 * 60, // 5 minutes
-    },
+
+  // Try cookie property for Better Auth
+  cookie: {
+   secure:process.env.NODE_ENV === "production",
+   sameSite:"none",
+   httpOnly:true,
   },
-  // Correct property for Better Auth cookie configuration
-  defaultCookieAttributes: {
-    sameSite: "none" as const,
-    secure: true,
-    httpOnly: true,
-    path: "/",
-    partitioned: false, // Disable CHIPS to prevent cross-domain blocking
-  },
+  secret:process.env.BETTER_AUTH_SECRET,
   advanced: {
     // Only disable security checks in development
     disableOriginCheck: process.env.NODE_ENV === "development",
