@@ -30,9 +30,11 @@ export const auth = betterAuth({
 
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:4000",
   trustedOrigins: [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://localhost:4000",
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://localhost:4000",
+  "https://frontend-test-seven-xi.vercel.app",
+  "https://frontend-test-kuber-pathaks-projects.vercel.app",
   ],
   advanced: {
     // Only disable security checks in development
