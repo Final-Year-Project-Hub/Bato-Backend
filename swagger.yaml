@@ -22,8 +22,6 @@ info:
     url: https://opensource.org/licenses/MIT
 
 servers:
-  - url: http://localhost:4000
-    description: Local development server
   - url: https://bato-backend-a9x8.onrender.com
     description: Production server
 
@@ -203,12 +201,13 @@ paths:
                     example: "1.0.0"
                   endpoints:
                     type: object
-
-  # ==================== Backend Endpoints ====================
-  /auth/signup:
+  
+  # ==================== Custom Auth Endpoints ====================
     post:
       summary: Sign up with email
       description: Register a new user using email and password
+      tags:
+        - Custom Auth
       requestBody:
         required: true
         content:
@@ -238,6 +237,8 @@ paths:
     post:
       summary: Sign in with email
       description: Authenticate user with email and password
+      tags:
+        - Custom Auth
       requestBody:
         required: true
         content:
@@ -263,37 +264,20 @@ paths:
     post:
       summary: Sign out
       description: Sign out the current user
+      tags:
+        - Custom Auth
       security:
         - CookieAuth: []
       responses:
         "200":
           description: Successfully signed out
-
-  /api/auth/sign-in/social:
-    post:
-      summary: OAuth sign in
-      description: Sign in using OAuth providers (Google, etc.) via Better Auth
-      tags:
-        - Better Auth
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                provider:
-                  type: string
-                  enum: [google]
-                callbackURL:
-                  type: string
-      responses:
-        "200":
-          description: OAuth redirect URL
-        "400":
-          description: Invalid provider
-
-  # ==================== Custom Auth Endpoints ====================
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+                
   /auth/verifyOtp:
     post:
       summary: Verify OTP
