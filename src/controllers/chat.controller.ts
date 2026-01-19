@@ -16,7 +16,7 @@ export class ChatController {
 
       const chatSession = await chatService.createChatSession(
         userId,
-        initialMessage
+        initialMessage,
       );
 
       res.status(201).json({
@@ -65,7 +65,7 @@ export class ChatController {
    */
   async getChatSession(req: Request, res: Response) {
     try {
-      const { chatId } = req.params;
+      const chatId = req.params.chatId as string;
 
       const chatSession = await chatService.getChatSession(chatId);
 
@@ -92,7 +92,7 @@ export class ChatController {
    */
   async getChatMessages(req: Request, res: Response) {
     try {
-      const { chatId } = req.params;
+      const chatId = req.params.chatId as string;
 
       const messages = await chatService.getChatMessages(chatId);
 
@@ -115,7 +115,7 @@ export class ChatController {
    */
   async addMessage(req: Request, res: Response) {
     try {
-      const { chatId } = req.params;
+      const chatId = req.params.chatId as string;
       const { role, content, roadmapId } = req.body;
 
       if (!role || !content) {
@@ -132,7 +132,7 @@ export class ChatController {
         chatId,
         role,
         content,
-        roadmapId
+        roadmapId,
       );
 
       res.status(201).json({
@@ -154,7 +154,7 @@ export class ChatController {
    */
   async deleteChatSession(req: Request, res: Response) {
     try {
-      const { chatId } = req.params;
+      const chatId = req.params.chatId as string;
 
       await chatService.deleteChatSession(chatId);
 
@@ -177,7 +177,7 @@ export class ChatController {
    */
   async updateChatTitle(req: Request, res: Response) {
     try {
-      const { chatId } = req.params;
+      const chatId = req.params.chatId as string;
       const { title } = req.body;
 
       if (!title) {

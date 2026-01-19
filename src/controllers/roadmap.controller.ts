@@ -35,7 +35,7 @@ export async function generateRoadmapStream(req: Request, res: Response) {
   if (!user) {
     throw new BadRequestException(
       "User not authenticated",
-      ErrorCode.UNAUTHORIZED_REQUEST
+      ErrorCode.UNAUTHORIZED_REQUEST,
     );
   }
 
@@ -51,7 +51,7 @@ export async function generateRoadmapStream(req: Request, res: Response) {
     GenerateRoadmapSchema.parse(req.body); // Still validate the full body
 
     console.log(
-      `[Roadmap-Stream] Request for: ${user.email}, chatSessionId: ${chatSessionId}`
+      `[Roadmap-Stream] Request for: ${user.email}, chatSessionId: ${chatSessionId}`,
     );
 
     // Prepare headers for SSE
@@ -73,7 +73,7 @@ export async function generateRoadmapStream(req: Request, res: Response) {
       select: { technology: true },
     });
     userContext.known_technologies = knownTech.map(
-      (t: { technology: string }) => t.technology
+      (t: { technology: string }) => t.technology,
     );
 
     // Validate environment variables
@@ -83,7 +83,7 @@ export async function generateRoadmapStream(req: Request, res: Response) {
     if (!fastApiKey) {
       throw new InternalException(
         "FASTAPI_API_KEY not configured",
-        ErrorCode.INTERNAL_EXCEPTION
+        ErrorCode.INTERNAL_EXCEPTION,
       );
     }
 
@@ -126,7 +126,7 @@ export async function generateRoadmapStream(req: Request, res: Response) {
         const { done, value } = await reader.read();
         if (done) {
           console.log(
-            `[Roadmap-Stream] Stream complete. Total chunks: ${chunkCount}`
+            `[Roadmap-Stream] Stream complete. Total chunks: ${chunkCount}`,
           );
           break;
         }
@@ -137,7 +137,7 @@ export async function generateRoadmapStream(req: Request, res: Response) {
         // Log first few chunks for debug
         if (chunkCount <= 3) {
           console.log(
-            `[Roadmap-Stream] Chunk ${chunkCount} (len=${chunk.length})`
+            `[Roadmap-Stream] Chunk ${chunkCount} (len=${chunk.length})`,
           );
         }
 
@@ -154,7 +154,7 @@ export async function generateRoadmapStream(req: Request, res: Response) {
           if (chunkCount <= 5) {
             console.log(
               `[Roadmap-Stream] Line ${chunkCount}:`,
-              line.substring(0, 100)
+              line.substring(0, 100),
             );
           }
 
@@ -170,7 +170,7 @@ export async function generateRoadmapStream(req: Request, res: Response) {
             } else if (eventData.event === "error") {
               console.error(
                 "[Roadmap-Stream] Backend reported error:",
-                eventData.data
+                eventData.data,
               );
               hasError = true;
             }
@@ -201,14 +201,14 @@ export async function generateRoadmapStream(req: Request, res: Response) {
       try {
         if (hasError) {
           console.log(
-            "[Roadmap-Stream] Stream ended with error. Skipping DB save."
+            "[Roadmap-Stream] Stream ended with error. Skipping DB save.",
           );
           res.end();
           return;
         }
 
         console.log(
-          `[Roadmap-Stream] Parsing full content (${fullContent.length} chars)`
+          `[Roadmap-Stream] Parsing full content (${fullContent.length} chars)`,
         );
 
         // Parse and validate roadmap data using utility
@@ -229,7 +229,7 @@ export async function generateRoadmapStream(req: Request, res: Response) {
           });
 
           console.log(
-            `[Roadmap-Stream] ✅ Saved roadmap to DB: ${savedRoadmap.id}`
+            `[Roadmap-Stream] ✅ Saved roadmap to DB: ${savedRoadmap.id}`,
           );
 
           // Emit the roadmap ID so client can link it
@@ -237,17 +237,17 @@ export async function generateRoadmapStream(req: Request, res: Response) {
             `data: ${JSON.stringify({
               event: "roadmap_created",
               data: savedRoadmap.id,
-            })}\n\n`
+            })}\n\n`,
           );
         } else {
           console.warn(
-            "[Roadmap-Stream] ⚠️ Output validation failed (no valid phases), not saving."
+            "[Roadmap-Stream] ⚠️ Output validation failed (no valid phases), not saving.",
           );
         }
       } catch (parseError) {
         console.error(
           "[Roadmap-Stream] Failed to parse/save roadmap:",
-          parseError
+          parseError,
         );
         // Do not fail the request, as stream already succeeded
       }
@@ -261,7 +261,7 @@ export async function generateRoadmapStream(req: Request, res: Response) {
     // If headers sent, we can't send JSON error, send SSE error event
     if (res.headersSent) {
       res.write(
-        `data: ${JSON.stringify({ event: "error", data: error.message })}\n\n`
+        `data: ${JSON.stringify({ event: "error", data: error.message })}\n\n`,
       );
       res.end();
     } else {
@@ -279,18 +279,21 @@ export async function getUserRoadmaps(req: Request, res: Response) {
   if (!user) {
     throw new BadRequestException(
       "User not authenticated",
-      ErrorCode.UNAUTHORIZED_REQUEST
+      ErrorCode.UNAUTHORIZED_REQUEST,
     );
   }
 
   // Validate query parameters
   const validatedQuery = GetRoadmapsQuerySchema.parse(req.query);
   const limit = Math.min(validatedQuery.limit, MAX_ROADMAP_LIMIT);
-  const { isSelected } = validatedQuery;
+  const { isSelected, chatSessionId } = validatedQuery;
 
   const where: any = { userId: user.id };
   if (isSelected !== undefined) {
     where.isSelected = isSelected;
+  }
+  if (chatSessionId) {
+    where.chatSessionId = chatSessionId;
   }
 
   try {
@@ -324,7 +327,7 @@ export async function getRoadmapById(req: Request, res: Response) {
   if (!user) {
     throw new BadRequestException(
       "User not authenticated",
-      ErrorCode.UNAUTHORIZED_REQUEST
+      ErrorCode.UNAUTHORIZED_REQUEST,
     );
   }
 
@@ -361,7 +364,7 @@ export async function healthCheck(req: Request, res: Response) {
     if (!fastApiUrl) {
       throw new InternalException(
         "FastAPI URL not configured",
-        ErrorCode.INTERNAL_EXCEPTION
+        ErrorCode.INTERNAL_EXCEPTION,
       );
     }
 
@@ -406,14 +409,14 @@ export async function ingestDocument(req: Request, res: Response) {
     if (!fastApiUrl) {
       throw new InternalException(
         "FastAPI URL not configured",
-        ErrorCode.INTERNAL_EXCEPTION
+        ErrorCode.INTERNAL_EXCEPTION,
       );
     }
 
     if (!fastApiKey) {
       throw new InternalException(
         "FASTAPI_API_KEY not configured",
-        ErrorCode.INTERNAL_EXCEPTION
+        ErrorCode.INTERNAL_EXCEPTION,
       );
     }
 
@@ -449,7 +452,7 @@ export async function selectRoadmap(req: Request, res: Response) {
   if (!user) {
     throw new BadRequestException(
       "User not authenticated",
-      ErrorCode.UNAUTHORIZED_REQUEST
+      ErrorCode.UNAUTHORIZED_REQUEST,
     );
   }
 
