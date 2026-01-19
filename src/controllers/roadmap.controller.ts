@@ -78,14 +78,6 @@ export async function generateRoadmapStream(req: Request, res: Response) {
 
     // Validate environment variables
     const fastApiUrl = process.env.FASTAPI_URL || DEFAULT_FASTAPI_URL;
-    const fastApiKey = process.env.FASTAPI_API_KEY;
-
-    if (!fastApiKey) {
-      throw new InternalException(
-        "FASTAPI_API_KEY not configured",
-        ErrorCode.INTERNAL_EXCEPTION,
-      );
-    }
 
     const endpoint = `${fastApiUrl}/api/v1/chat/stream`;
 
@@ -103,7 +95,6 @@ export async function generateRoadmapStream(req: Request, res: Response) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-API-Key": fastApiKey,
       },
       body: JSON.stringify(payload),
     });
@@ -404,7 +395,6 @@ export async function healthCheck(req: Request, res: Response) {
 export async function ingestDocument(req: Request, res: Response) {
   try {
     const fastApiUrl = process.env.FASTAPI_URL;
-    const fastApiKey = process.env.FASTAPI_API_KEY;
 
     if (!fastApiUrl) {
       throw new InternalException(
@@ -413,18 +403,10 @@ export async function ingestDocument(req: Request, res: Response) {
       );
     }
 
-    if (!fastApiKey) {
-      throw new InternalException(
-        "FASTAPI_API_KEY not configured",
-        ErrorCode.INTERNAL_EXCEPTION,
-      );
-    }
-
     const response = await fetch(`${fastApiUrl}/api/v1/ingest`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-API-Key": fastApiKey,
       },
     });
 
