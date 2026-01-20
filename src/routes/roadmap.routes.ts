@@ -12,18 +12,18 @@ import { verifyUser } from "../middlewares/auth.middleware";
 
 const router: Router = Router();
 
+/**
+ * Health check endpoint - verifies FastAPI connectivity
+ * @route GET /api/roadmap/health
+ */
+router.get("/health", errorHandler(healthCheck));
+
 // All routes require authentication
 router.use(verifyUser);
 
 // ============================================
 // Utility Routes (must come before /:id)
 // ============================================
-
-/**
- * Health check endpoint - verifies FastAPI connectivity
- * @route GET /api/roadmap/health
- */
-router.get("/health", errorHandler(healthCheck));
 
 /**
  * Document ingestion endpoint - uploads documents to vector DB via FastAPI
