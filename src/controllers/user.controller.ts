@@ -1,0 +1,112 @@
+import { Response,Request,NextFunction} from "express";
+import { hashPassword } from "../utils/hash";
+import { prisma } from "../lib/prisma";
+import { ApiResponse } from "@/utils/apiResponse";
+import { BadRequestException, ErrorCode } from "@/utils/root";
+import { uploadToCloudinary } from "@/lib/cloudinary";
+
+import { createAndSendOtp } from "../utils/otp";
+
+export const editUser = async(req:Request,res:Response,next:NextFunction)=>{
+    const userId = req.user?.id;
+    if(!userId){
+        throw new BadRequestException("User ID is required",ErrorCode.BAD_REQUEST)
+    }
+    
+    try{
+        const {name, email, password} = req.body;
+        const currentUser = await prisma.user.findUnique({ where: { id: userId } });
+        
+        if (!currentUser) {
+            throw new BadRequestException("User not found", ErrorCode.USER_NOT_FOUND);
+        }
+
+        const updates: any = {};
+        if (name) updates.name = name;
+        if (password) updates.password = await hashPassword(password);
+        
+        let message = "User profile updated successfully";
+        let emailChangePending = false;
+
+        // Handle email change separately
+        if (email && email !== currentUser.email) {
+            emailChangePending = true;
+            
+            // Check if new email is already taken
+            const emailExists = await prisma.user.findUnique({ where: { email } });
+            if (emailExists) {
+                throw new BadRequestException("Email already in use", ErrorCode.USER_ALREADY_EXISTS);
+            }
+
+            // Send OTP to new email
+            await createAndSendOtp(currentUser.id, email, name || currentUser.name);
+            message = "Profile updated. Please verify your new email address via OTP sent to " + email;
+        }
+
+        // Update other fields immediately
+        if (Object.keys(updates).length > 0) {
+           await prisma.user.update({
+                where:{ id: userId },
+                data: updates,
+            });
+        }
+
+        // Fetch updated user
+        const updatedUser = await prisma.user.findUnique({
+             where: { id: userId },
+             select:{
+                id:true,
+                name:true,
+                email:true,
+                image: true,
+                createdAt:true,
+                updatedAt:true,
+                role:true,
+            },
+        });
+
+        res.status(200).json(new ApiResponse(message, {
+            user: updatedUser,
+            emailChangePending
+        }));
+
+    } catch(error){
+        next(error)
+    }
+}
+
+export const userProfile = async(req:Request,res:Response,next:NextFunction)=>{
+   try {
+    const image = req.file
+    if(!image){
+        throw new BadRequestException("No file uploaded",ErrorCode.BAD_REQUEST)
+    }
+    const localFilePath = image.path;
+    const cloudinaryResponse = await uploadToCloudinary(localFilePath);
+
+    if(!cloudinaryResponse){
+        throw new BadRequestException("Failed to upload image to cloud", ErrorCode.BAD_REQUEST);
+    }
+    
+    // Update user in DB
+    const updatedUser = await prisma.user.update({
+        where: { id: req.user?.id },
+        data: {
+            image: cloudinaryResponse.secure_url
+        },
+         select:{
+                id:true,
+                name:true,
+                email:true,
+                image: true,
+                createdAt:true,
+                updatedAt:true,
+                role:true,
+            },
+    });
+
+    res.status(200).json(new ApiResponse("Profile image updated successfully", updatedUser));
+   } catch (error) {
+    next(error)
+   }
+}

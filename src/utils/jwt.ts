@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import { InternalException, ErrorCode } from "./root";
 import dotenv from "dotenv";
+import { CookieOptions } from "express";
 dotenv.config();
 
 
@@ -54,4 +55,10 @@ export const generateRefreshToken = (user: JwtPayload) => {
     console.error("JWT Generation Error (Refresh):", error);
     throw new InternalException("Failed to generate refresh token", ErrorCode.INTERNAL_EXCEPTION, error.message || error);
   }
+};
+
+export const cookieOptions: CookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production", // ✅ only https in prod
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
 };

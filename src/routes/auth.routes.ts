@@ -5,9 +5,11 @@ import {
   logout,
   verifyOtp,
   resendOtp,
+  overViewSummary,
+  users,
 } from "../controllers/auth.controller";
-import { errorHandler } from "../middlewares/error-handler";
-import { verifyUser } from "../middlewares/auth.middleware";
+import {errorHandler } from "../middlewares/error-handler";
+import { verifyUser,verifyAdmin } from "../middlewares/auth.middleware";
 const router: Router = Router();
 
 router.route("/signup").post(errorHandler(signUp));
@@ -15,6 +17,8 @@ router.route("/login").post(errorHandler(login));
 router.route("/logout").post(verifyUser, errorHandler(logout));
 router.route("/verifyOtp").post(errorHandler(verifyOtp));
 router.route("/resendOtp").post(errorHandler(resendOtp));
+router.route("/overViewSummary").get(verifyUser,verifyAdmin, errorHandler(overViewSummary));
+router.route("/users").get(verifyAdmin,errorHandler(users))
 router.get("/profile", verifyUser, (req, res) => {
   res.json({ message: "Access granted!", user: (req as any).user });
 });

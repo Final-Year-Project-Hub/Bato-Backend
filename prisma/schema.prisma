@@ -6,7 +6,6 @@ datasource db {
   provider = "postgresql"
 }
 
-
 model User {
   id            String                @id @default(uuid())
   name          String?
@@ -24,11 +23,11 @@ model User {
   knownTech     UserKnownTechnology[]
   preferences   UserPreferences?
   otps          Otp[]
+  document      Document[]
 
   @@index([role])
   @@index([email])
 }
-
 
 model Roadmap {
   id            String           @id @default(uuid())
@@ -141,6 +140,36 @@ model Otp {
   @@map("otps")
 }
 
+model Document {
+  id         String         @id @default(uuid())
+  uploaderId String
+  fileName   String
+  fileUrl    String
+  status     DocumentStatus @default(UPLOADED)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  user       User           @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  ingest Ingest[]
+
+  @@index([uploaderId])
+  @@index([status])
+}
+
+model Ingest {
+  id         String          @id @default(uuid())
+  documentId String
+  status     IngestionStatus @default(QUEUED)
+  error      String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([status])
+}
+
 enum Role {
   USER
   ADMIN
@@ -149,4 +178,19 @@ enum Role {
 enum OtpPurpose {
   EMAIL_VERIFICATION
   FORGOT_PASSWORD
+}
+
+enum DocumentStatus {
+  UPLOADED
+  QUEUED
+  PROCESSING
+  INGESTED
+  FAILED
+}
+
+enum IngestionStatus {
+  QUEUED
+  PROCESSING
+  INGESTED
+  FAILED
 }

@@ -36,6 +36,7 @@ export enum ErrorCode {
   EMAIL_NOT_VERIFIED = 4006,
   INVALID_OTP = 4007,
   RATE_LIMIT_EXCEEDED = 4008,
+  BAD_REQUEST = 4000,
 }
 
 /**

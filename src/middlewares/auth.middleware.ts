@@ -4,6 +4,8 @@ import { prisma } from "../lib/prisma.js";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import { generateAccessandRefreshToken } from "../controllers/auth.controller";
 import { comparePassword } from "../utils/hash";
+import { ApiResponse } from "@/utils/apiResponse";
+import { cookieOptions } from "@/utils/jwt";
 
 interface TokenPayload extends JwtPayload {
   data: {
@@ -107,12 +109,6 @@ export const verifyUser = async (
     const { accessToken: newAccessToken, refreshToken: newRefreshToken } =
       await generateAccessandRefreshToken(user.id);
 
-    const cookieOptions = {
-      httpOnly: true,
-      secure: true,
-      sameSite: "none" as const,
-    };
-
     res.cookie("accessToken", newAccessToken, cookieOptions);
     res.cookie("refreshToken", newRefreshToken, cookieOptions);
 
@@ -128,3 +124,19 @@ export const verifyUser = async (
     next(error);
   }
 };
+
+export const verifyAdmin = async(req:Request,res:Response,next:NextFunction)=>{
+  if(!req.user){
+    throw new UnauthorizedException(
+      "Unauthorized. No admin access token provided",
+      ErrorCode.UNAUTHORIZED_REQUEST,
+    );
+  }
+  if(req.user.role !== "ADMIN"){
+    throw new UnauthorizedException(
+      "Unauthorized. Admin only allowded",
+      ErrorCode.UNAUTHORIZED_REQUEST,
+    );
+  }
+  next();
+}

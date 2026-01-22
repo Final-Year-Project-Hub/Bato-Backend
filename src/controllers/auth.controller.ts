@@ -1,8 +1,8 @@
 import { comparePassword, hashPassword } from "../utils/hash";
 import { createAndSendOtp, generateOtp } from "../utils/otp";
 import { prisma } from "../lib/prisma";
-import { Request, Response, NextFunction, CookieOptions } from "express";
-import { LoginSchema, SignUpSchema } from "../validation/auth.validations";
+import { Request, Response, NextFunction} from "express";
+import { cookieOptions } from "../utils/jwt";
 import {
   BadRequestException,
   ErrorCode,
@@ -16,6 +16,7 @@ import {
   VerifyOtpSchema,
   ResendOtpSchema,
 } from "../validation/auth.validations";
+import { paginate } from "@/utils/pagination";
 
 export const generateAccessandRefreshToken = async (userId: string) => {
   const user = await prisma.user.findUnique({
@@ -190,12 +191,6 @@ export const login = async (
       },
     });
 
-    const cookieOptions: CookieOptions = {
-      httpOnly: true,
-      secure: true,
-      sameSite: "none",
-    };
-
     res
       .status(200)
       .cookie("accessToken", accessToken, cookieOptions)
@@ -231,13 +226,6 @@ export const logout = async (
         ErrorCode.UNAUTHORIZED_REQUEST,
       );
     }
-
-    const cookieOptions: CookieOptions = {
-      httpOnly: true,
-      secure: true,
-      sameSite: "none",
-    };
-
     res
       .status(200)
       .clearCookie("accessToken", cookieOptions)
@@ -321,11 +309,12 @@ export const verifyOtp = async (
           data: { verified: true },
         });
 
-        // Update user as verified
+        // Update user as verified and update email if changed
         const user = await tx.user.update({
           where: { id: otpRecord.userId },
           data: {
             emailVerified: true,
+            email: otpRecord.email, // Update email to the one that was verified
           },
         });
 
@@ -454,3 +443,67 @@ export const resendOtp = async (
 //     next(error);
 //   }
 // };
+
+export const overViewSummary = async (req: Request, res: Response, next: NextFunction) => {
+  const totalUsers = await prisma.user.count();
+  const activeUsers = await prisma.user.count({
+    where:{
+      isActive:true
+    }
+  })
+  const totalRoadmaps = await prisma.roadmap.count();
+  const totalDocuments = await prisma.document.count();
+  
+  res.status(200).json(new ApiResponse("Overview summary", {
+    totalUsers,
+    activeUsers,
+    totalRoadmaps,
+    totalDocuments,
+  }));
+};
+
+export const users = async (req: Request, res: Response, next: NextFunction) => {
+  const { page, limit, skip, search, sortBy, sortOrder } = paginate(req.query);
+
+  const where = search
+    ? {
+        OR: [
+          { name: { contains: search, mode: "insensitive" as const } },
+          { email: { contains: search, mode: "insensitive" as const } },
+        ],
+      }
+    : {};
+
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: {
+        [sortBy || "createdAt"]: sortOrder || "desc",
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        emailVerified: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
+    prisma.user.count({ where }),
+  ]);
+
+  res.status(200).json(
+    new ApiResponse("Users", {
+      users,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    })
+  );
+};

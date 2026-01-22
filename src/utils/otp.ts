@@ -201,6 +201,7 @@ export const sendOtpEmail = async (
   }
 };
 
+// Exported to be used in User Controller for email update
 export const createAndSendOtp = async (
   userId: string,
   email: string,

@@ -12,7 +12,6 @@ BEGIN;
 CREATE TYPE "OtpPurpose_new" AS ENUM ('EMAIL_VERIFICATION', 'FORGOT_PASSWORD');
 ALTER TYPE "OtpPurpose" RENAME TO "OtpPurpose_old";
 ALTER TYPE "OtpPurpose_new" RENAME TO "OtpPurpose";
-DROP TYPE "public"."OtpPurpose_old";
 COMMIT;
 
 -- DropForeignKey
@@ -135,3 +134,5 @@ ALTER TABLE "RoadmapProgress" ADD CONSTRAINT "RoadmapProgress_roadmapId_fkey" FO
 
 -- AddForeignKey
 ALTER TABLE "otps" ADD CONSTRAINT "otps_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+DROP TYPE "public"."OtpPurpose_old";

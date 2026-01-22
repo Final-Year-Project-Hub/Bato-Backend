@@ -10,6 +10,7 @@ import authRoutes from "./routes/auth.routes";
 import roadmapRoutes from "./routes/roadmap.routes";
 import chatRoutes from "./routes/chat.routes";
 import progressRoutes from "./routes/progress.routes";
+import userRoutes from "./routes/user.routes";
 import { errorMiddleware } from "./middlewares/error";
 import { errorHandler } from "./middlewares/error-handler";
 // Better Auth removed - using custom JWT authentication
@@ -69,6 +70,7 @@ app.use("/auth", authRoutes);
 app.use("/api/roadmap", roadmapRoutes);
 app.use("/api/chats", chatRoutes);
 app.use("/api/roadmap/:roadmapId/progress", progressRoutes);
+app.use("/api/user", userRoutes);
 
 // Root route
 app.get("/", (req, res) => {
@@ -81,6 +83,7 @@ app.get("/", (req, res) => {
       roadmap: "/api/roadmap",
       chat: "/api/chats",
       progress: "/api/roadmap/:roadmapId/progress",
+      user: "/api/user (edit, profile-image)",
     },
   });
 });
