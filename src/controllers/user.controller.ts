@@ -21,10 +21,8 @@ export const editUser = async(req:Request,res:Response,next:NextFunction)=>{
             throw new BadRequestException("User not found", ErrorCode.USER_NOT_FOUND);
         }
 
+
         const updates: any = {};
-        if (name) updates.name = name;
-        if (password) updates.password = await hashPassword(password);
-        
         let message = "User profile updated successfully";
         let emailChangePending = false;
 
@@ -42,6 +40,9 @@ export const editUser = async(req:Request,res:Response,next:NextFunction)=>{
             await createAndSendOtp(currentUser.id, email, name || currentUser.name);
             message = "Profile updated. Please verify your new email address via OTP sent to " + email;
         }
+
+        if (name) updates.name = name;
+        if (password) updates.password = await hashPassword(password);
 
         // Update other fields immediately
         if (Object.keys(updates).length > 0) {
