@@ -49,7 +49,7 @@ export const generateRefreshToken = (user: JwtPayload) => {
         },
       },
       secret,
-      { expiresIn: "1d" }
+      { expiresIn: "7d" }
     );
   } catch (error: any) {
     console.error("JWT Generation Error (Refresh):", error);

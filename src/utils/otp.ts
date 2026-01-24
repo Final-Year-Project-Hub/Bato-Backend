@@ -65,6 +65,7 @@ const createEmailMessage = (
 export const generateOtp = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
+console.log("Otp is :",generateOtp);
 
 export const sendOtpEmail = async (
   email: string,
@@ -210,6 +211,7 @@ export const createAndSendOtp = async (
   try {
     // Generate OTP
     const otp = generateOtp();
+    console.log("Otp:",otp);
     const otpHash = await hashPassword(otp);
     const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 

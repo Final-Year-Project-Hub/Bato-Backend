@@ -4,7 +4,6 @@ import { prisma } from "../lib/prisma.js";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import { generateAccessandRefreshToken } from "../controllers/auth.controller";
 import { comparePassword } from "../utils/hash";
-import { ApiResponse } from "@/utils/apiResponse";
 import { cookieOptions } from "@/utils/jwt";
 
 interface TokenPayload extends JwtPayload {
