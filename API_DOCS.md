@@ -85,8 +85,26 @@ curl -X POST http://localhost:4000/auth/verifyOtp \
   }'
 ```
 
-### Generate Roadmap (Streaming)
+### Forgot Password
 
+```bash
+curl -X POST http://localhost:4000/auth/forgotPassword \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com"
+  }'
+```
+### Reset Password
+
+```bash
+curl -X POST http://localhost:4000/auth/resetPassword \
+  -H "Content-Type: application/json" \
+  -d '{
+    password: "newPassword"
+  }'
+```
+
+### Generate Roadmap (Streaming)
 ```bash
 curl -X POST http://localhost:4000/api/roadmap/stream \
   -H "Content-Type: application/json" \

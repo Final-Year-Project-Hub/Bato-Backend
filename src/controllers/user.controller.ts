@@ -125,7 +125,7 @@ export const deleteUser = async (req: Request, res: Response, next: NextFunction
         await prisma.user.delete({
             where: { id: userId }
         });
-
+        
         res.status(200).json(new ApiResponse("User account deleted successfully", null));
 
     } catch (error) {

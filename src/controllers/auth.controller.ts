@@ -11,7 +11,7 @@ import {
 } from "../utils/root";
 import { ApiResponse } from "../utils/apiResponse";
 import { generateAccessToken, generateRefreshToken } from "../utils/jwt";
-// import { OtpPurpose } from "@prisma/client";
+import { OtpPurpose } from "@prisma/client";
 import {
   VerifyOtpSchema,
   ResendOtpSchema,
@@ -330,12 +330,20 @@ export const verifyOtp = async (
         return user;
       },
     );
-
+if(otpRecord.purpose === "EMAIL_VERIFICATION"){
     res.status(200).json(
       new ApiResponse("Email verified successfully. Please sign in.", {
         verified: true,
       }),
     );
+}
+if(otpRecord.purpose === "FORGOT_PASSWORD"){
+  res.status(200).json(
+    new ApiResponse("Email verified successfully. Please reset your password.", {
+      verified: true,
+    }),
+  );
+}
   } catch (error) {
     next(error);
   }
@@ -412,37 +420,63 @@ export const resendOtp = async (
     next(error);
   }
 };
-// export const forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
-//   try {
-//     const { email } = ForgotPasswordSchema.parse(req.body);
-//     const user = await prisma.user.findUnique({
-//       where: { email },
-//     });
+  export const forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const {email}= req.body || {};
 
-//     if (!user) {
-//       throw new BadRequestException("User with this email not found", ErrorCode.USER_NOT_FOUND);
-//     }
+      if (!email) {
+        throw new BadRequestException("Email is required", ErrorCode.BAD_REQUEST);
+      }
 
-//     const otp = generateOtp();
-//     const otpHash = await hashPassword(otp);
-//     const otpExpiresAt = new Date(Date.now() + 2 * 60 * 1000);
+      const user = await prisma.user.findUnique({
+        where: { email },
+        select:{
+          id:true,
+          email:true,
+          name:true,
+          emailVerified:true,
+        }
+      });
 
-//     await prisma.user.update({
-//       where: { id: user.id },
-//       data: {
-//         otp: otpHash,
-//         purpose: OtpPurpose.FORGOT_PASSWORD,
-//         otpExpiresAt: otpExpiresAt,
-//       },
-//     });
+      if (!user) {
+        throw new BadRequestException("User with this email not found", ErrorCode.USER_NOT_FOUND);
+      }
+      await createAndSendOtp(user.id, user.email, user.name, OtpPurpose.FORGOT_PASSWORD);
+      res.status(200).json(
+        new ApiResponse("OTP sent successfully", {
+          email: user.email
+        }),
+      );
+    } catch (error) {
+      next(error);
+      // throw new InternalException("Failed to send OTP", ErrorCode.INTERNAL_SERVER_ERROR);
+    }
+  };
 
-//     await sendEmail(email, otp, OtpPurpose.FORGOT_PASSWORD);
+  export const resetPassword = async (req:Request,res:Response,next:NextFunction)=>{
+    try {
+      const {password} = req.body || {};
+      
+      if (!password) {
+         throw new BadRequestException("Password is required", ErrorCode.BAD_REQUEST);
+      }
 
-//     res.status(200).json(new ApiResponse("Password reset OTP sent to email", { userId: user.id, email: user.email }));
-//   } catch (error) {
-//     next(error);
-//   }
-// };
+      const hashedPassword = await hashPassword(password);
+      const updatedUser = await prisma.user.update({
+        where:{
+          id:req.user?.id,
+        },
+        data:{
+          password:hashedPassword,
+        }
+      })
+      res.status(200).json(new ApiResponse("Password reset successfully", updatedUser));
+    } catch (error) {
+      next(error);
+      // throw new InternalException("Failed to reset password", ErrorCode.INTERNAL_SERVER_ERROR);
+    }
+
+  }
 
 export const overViewSummary = async (req: Request, res: Response, next: NextFunction) => {
   const totalUsers = await prisma.user.count();

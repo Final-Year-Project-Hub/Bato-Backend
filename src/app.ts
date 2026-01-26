@@ -53,6 +53,7 @@ app.use(
 // Better Auth route handler removed
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // Swagger API Documentation

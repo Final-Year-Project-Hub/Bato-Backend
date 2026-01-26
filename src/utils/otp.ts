@@ -1,6 +1,7 @@
 import { hashPassword } from "./hash";
 import { google } from "googleapis";
 import { prisma } from "../lib/prisma.js";
+import { OtpPurpose } from "@prisma/client";
 
 const oAuth2Client = new google.auth.OAuth2(
   process.env.GMAIL_CLIENT_ID,
@@ -206,7 +207,8 @@ export const sendOtpEmail = async (
 export const createAndSendOtp = async (
   userId: string,
   email: string,
-  name?: string | null
+  name?: string | null,
+  purpose: OtpPurpose = OtpPurpose.EMAIL_VERIFICATION
 ): Promise<{ status: string; message: string; data: { email: string } }> => {
   try {
     // Generate OTP
@@ -221,8 +223,7 @@ export const createAndSendOtp = async (
       await tx.otp.deleteMany({
         where: { userId },
       });
-
-      // Create new OTP
+  // Create new OTP
       await tx.otp.create({
         data: {
           userId,
@@ -231,7 +232,7 @@ export const createAndSendOtp = async (
           expiresAt: otpExpiresAt,
           verified: false,
           attempts: 0,
-          purpose: "EMAIL_VERIFICATION",
+          purpose: purpose,
           type: "EMAIL",
         },
       });

@@ -432,6 +432,95 @@ paths:
         "401":
           description: Unauthorized
 
+  /auth/forgotPassword:
+    post:
+      summary: Forgot password
+      description: Request a password reset email
+      tags:
+        - Custom Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "user@example.com"
+      responses:
+        "200":
+          description: Password reset email sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Password reset email sent successfully"
+        "400":
+          description: User not found or rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/resetPassword:
+    post:
+      summary: Reset password
+      description: Reset password using OTP code sent to user's email
+      tags:
+        - Custom Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - otp
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "user@example.com"
+                otp:
+                  type: string
+                  pattern: '^\d{6}$'
+                  example: "123456"
+                password:
+                  type: string
+                  example: "newPassword"
+      responses:
+        "200":
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Password reset successful"
+        "400":
+          description: Invalid or expired OTP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   # ==================== Roadmap Endpoints ====================
   /api/roadmap/health:
     get:
