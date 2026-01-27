@@ -2,6 +2,7 @@ import { comparePassword, hashPassword } from "../utils/hash";
 import { createAndSendOtp, generateOtp } from "../utils/otp";
 import { prisma } from "../lib/prisma";
 import { Request, Response, NextFunction} from "express";
+import jwt from "jsonwebtoken";
 import { cookieOptions } from "../utils/jwt";
 import {
   BadRequestException,
@@ -17,6 +18,7 @@ import {
   ResendOtpSchema,
 } from "../validation/auth.validations";
 import { paginate } from "@/utils/pagination";
+import { cleanRegex } from "zod/v4/core/util.cjs";
 
 export const generateAccessandRefreshToken = async (userId: string) => {
   const user = await prisma.user.findUnique({
@@ -333,14 +335,30 @@ export const verifyOtp = async (
 if(otpRecord.purpose === "EMAIL_VERIFICATION"){
     res.status(200).json(
       new ApiResponse("Email verified successfully. Please sign in.", {
-        verified: true,
+        updatedUser,
+        emailVerified: true,
       }),
     );
 }
 if(otpRecord.purpose === "FORGOT_PASSWORD"){
+  const secret = process.env.REFRESH_TOKEN_SECRET!;
+  const resetToken = jwt.sign(
+    { userId: otpRecord.userId }, // Payload
+    secret,
+    { expiresIn: "10m" }
+  );
+  
+  // const hashedResetToken = await hashPassword(resetToken);
+  
+  await prisma.user.update({
+    where: { id: otpRecord.userId },
+    data: { refreshToken: resetToken },
+  });
+
   res.status(200).json(
     new ApiResponse("Email verified successfully. Please reset your password.", {
-      verified: true,
+      updatedUser,
+      emailVerified: true,
     }),
   );
 }
@@ -433,6 +451,7 @@ export const resendOtp = async (
         select:{
           id:true,
           email:true,
+          otps:true,
           name:true,
           emailVerified:true,
         }
@@ -444,7 +463,7 @@ export const resendOtp = async (
       await createAndSendOtp(user.id, user.email, user.name, OtpPurpose.FORGOT_PASSWORD);
       res.status(200).json(
         new ApiResponse("OTP sent successfully", {
-          email: user.email
+         user,
         }),
       );
     } catch (error) {
@@ -455,27 +474,55 @@ export const resendOtp = async (
 
   export const resetPassword = async (req:Request,res:Response,next:NextFunction)=>{
     try {
-      const {password} = req.body || {};
+      const { token, password } = req.body || {};
+      
+      if (!token) {
+        throw new BadRequestException("Reset token is required", ErrorCode.BAD_REQUEST);
+      }
       
       if (!password) {
          throw new BadRequestException("Password is required", ErrorCode.BAD_REQUEST);
       }
 
-      const hashedPassword = await hashPassword(password);
+      // Verify token signature
+      let decoded: any;
+      try {
+        decoded = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET!);
+      } catch (error) {
+        throw new BadRequestException("Invalid or expired reset token", ErrorCode.UNAUTHORIZED_REQUEST);
+      }
+      
+      const userId = decoded.userId;
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId }
+      });
+      
+      if (!user || !user.refreshToken) {
+         throw new BadRequestException("Invalid request", ErrorCode.UNAUTHORIZED_REQUEST);
+      }
+      
+      // Verify token matches the one in DB
+      const isTokenValid = await comparePassword(token, user.refreshToken);
+      if (!isTokenValid) {
+        throw new BadRequestException("Invalid reset token", ErrorCode.UNAUTHORIZED_REQUEST);
+      }
+
+      const newPassword = await hashPassword(password);
+      
       const updatedUser = await prisma.user.update({
         where:{
-          id:req.user?.id,
+         id: userId,
         },
         data:{
-          password:hashedPassword,
+          password:newPassword,
+          refreshToken: null // Delete token after use
         }
       })
       res.status(200).json(new ApiResponse("Password reset successfully", updatedUser));
     } catch (error) {
       next(error);
-      // throw new InternalException("Failed to reset password", ErrorCode.INTERNAL_SERVER_ERROR);
     }
-
   }
 
 export const overViewSummary = async (req: Request, res: Response, next: NextFunction) => {

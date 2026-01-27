@@ -19,7 +19,7 @@ router.route("/login").post(errorHandler(login));
 router.route("/logout").post(verifyUser, errorHandler(logout));
 router.route("/verifyOtp").post(errorHandler(verifyOtp));
 router.route("/resendOtp").post(errorHandler(resendOtp));
-router.route("/resetPassword").post(verifyUser,errorHandler(resetPassword));
+router.route("/resetPassword").post(errorHandler(resetPassword));
 router.route("/forgotPassword").post(errorHandler(forgotPassword));
 router.route("/overViewSummary").get(verifyUser,verifyAdmin, errorHandler(overViewSummary));
 router.route("/users").get(verifyAdmin,errorHandler(users))
