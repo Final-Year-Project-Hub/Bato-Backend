@@ -244,7 +244,7 @@ export const verifyOtp = async (
   next: NextFunction,
 ) => {
   try {
-    const { email, otp } = req.body;
+    const { email, otp,purpose } = req.body;
 
     if (!email || !otp) {
       throw new BadRequestException(
@@ -257,6 +257,7 @@ export const verifyOtp = async (
     const otpRecord = await prisma.otp.findFirst({
       where: {
         email,
+        purpose,
         verified: false,
         expiresAt: {
           gt: new Date(),
@@ -332,7 +333,7 @@ export const verifyOtp = async (
         return user;
       },
     );
-if(otpRecord.purpose === "EMAIL_VERIFICATION"){
+if(purpose === "EMAIL_VERIFICATION" && purpose !== "FORGOT_PASSWORD"){
     res.status(200).json(
       new ApiResponse("Email verified successfully. Please sign in.", {
         updatedUser,
@@ -340,25 +341,26 @@ if(otpRecord.purpose === "EMAIL_VERIFICATION"){
       }),
     );
 }
-if(otpRecord.purpose === "FORGOT_PASSWORD"){
+if(purpose === "FORGOT_PASSWORD" && purpose !== "EMAIL_VERIFICATION"){
   const secret = process.env.REFRESH_TOKEN_SECRET!;
   const resetToken = jwt.sign(
     { userId: otpRecord.userId }, // Payload
     secret,
     { expiresIn: "10m" }
   );
+  console.log("Reset Token : ",resetToken);
+  const hashedResetToken = await hashPassword(resetToken);
   
-  // const hashedResetToken = await hashPassword(resetToken);
-  
-  await prisma.user.update({
+  const update = await prisma.user.update({
     where: { id: otpRecord.userId },
-    data: { refreshToken: resetToken },
+    data: { refreshToken: hashedResetToken },
   });
 
   res.status(200).json(
     new ApiResponse("Email verified successfully. Please reset your password.", {
-      updatedUser,
+      update,
       emailVerified: true,
+      resetToken,
     }),
   );
 }
