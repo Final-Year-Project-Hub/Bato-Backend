@@ -30,6 +30,8 @@ tags:
     description: Custom authentication endpoints (OTP verification)
   - name: Roadmap
     description: AI-powered learning roadmap generation and management
+  - name: Topic
+    description: Topic deep-dive for detailed learning content
   - name: Chat
     description: Chat session management for learning assistance
   - name: Progress
@@ -206,6 +208,89 @@ components:
           type: number
           format: float
           description: Calculated field, not stored in database
+
+    TopicDetail:
+      type: object
+      properties:
+        title:
+          type: string
+          example: "Components"
+        phase_number:
+          type: integer
+          example: 1
+        phase_title:
+          type: string
+          example: "Fundamentals"
+        overview:
+          type: string
+          description: Comprehensive introduction to the topic
+        why_important:
+          type: string
+          description: Explanation of why this topic matters
+        key_concepts:
+          type: array
+          items:
+            type: string
+          example: ["JSX", "Props", "State", "Lifecycle"]
+        prerequisites:
+          type: array
+          items:
+            type: string
+          example: ["Basic JavaScript", "HTML/CSS"]
+        learning_objectives:
+          type: array
+          items:
+            type: string
+          example: ["Create functional components", "Use props effectively"]
+        learning_resources:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              type:
+                type: string
+                enum: [article, video, tutorial, documentation]
+              url:
+                type: string
+                format: uri
+                nullable: true
+              estimated_time:
+                type: string
+                nullable: true
+        practice_exercises:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              description:
+                type: string
+              difficulty:
+                type: string
+                enum: [beginner, intermediate, advanced]
+              estimated_time:
+                type: string
+        related_topics:
+          type: array
+          items:
+            type: string
+        next_topic:
+          type: string
+          nullable: true
+        estimated_hours:
+          type: number
+          format: float
+        difficulty_level:
+          type: string
+          enum: [beginner, intermediate, advanced]
+        doc_links:
+          type: array
+          items:
+            type: string
+            format: uri
 
 paths:
   /:
@@ -789,6 +874,97 @@ paths:
                 properties:
                   error:
                     type: string
+
+  # ==================== Topic Endpoints ====================
+  /api/topic/{phaseNumber}/{topicTitle}:
+    get:
+      summary: Get topic deep-dive
+      description: |
+        Retrieve detailed educational content for a specific topic within a roadmap phase.
+        This endpoint proxies to the Bato-Ai FastAPI backend which generates comprehensive
+        learning content using Groq LLM and RAG-based documentation retrieval.
+      tags:
+        - Topic
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: phaseNumber
+          in: path
+          required: true
+          description: Phase number (1-indexed) containing the topic
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+        - name: topicTitle
+          in: path
+          required: true
+          description: Title of the topic (URL-encoded)
+          schema:
+            type: string
+          example: "Components"
+        - name: phaseTitle
+          in: query
+          required: true
+          description: Title of the phase this topic belongs to
+          schema:
+            type: string
+          example: "Fundamentals"
+        - name: goal
+          in: query
+          required: true
+          description: Original roadmap goal (e.g., 'Learn React')
+          schema:
+            type: string
+          example: "Learn React"
+      responses:
+        "200":
+          description: Topic details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopicDetail"
+        "400":
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Invalid request parameters"
+                  details:
+                    type: array
+                    items:
+                      type: object
+        "401":
+          description: Unauthorized - authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Topic not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Topic not found"
+        "500":
+          description: Failed to fetch topic detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Failed to fetch topic detail"
 
   # ==================== Chat Endpoints ====================
   /api/chats:

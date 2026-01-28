@@ -1,43 +1,52 @@
-import { RoadmapData } from "../types/roadmap.types";
+// ============================================================================
+// CORE PARSING LOGIC
+// ============================================================================
 
 /**
- * Attempts to parse JSON with multiple repair strategies
+ * The Master Parser: Handles all LLM quirks in one place.
+ * 1. Markdown code blocks
+ * 2. Preambles/Postscripts (finding outer braces)
+ * 3. C-style comments (// and / * ... * /)
+ * 4. Trailing commas (via regex strategy)
  */
-export function parseRoadmapJSON(content: string): RoadmapData {
-  // Clean Markdown code blocks if present
-  let jsonStr = content.trim();
-  if (jsonStr.startsWith("```json")) jsonStr = jsonStr.slice(7);
-  if (jsonStr.startsWith("```")) jsonStr = jsonStr.slice(3);
-  if (jsonStr.endsWith("```")) jsonStr = jsonStr.slice(0, -3);
-  jsonStr = jsonStr.trim();
+export function baseParseJSON(content: string): any {
+  if (!content) throw new Error("Empty input");
 
-  // Attempt parsing with progressive repair strategies
+  let jsonStr = content.trim();
+
+  // 1. Initial Markdown Cleanup
+  if (jsonStr.startsWith("```json")) jsonStr = jsonStr.slice(7);
+  else if (jsonStr.startsWith("```")) jsonStr = jsonStr.slice(3);
+  if (jsonStr.endsWith("```")) jsonStr = jsonStr.slice(0, -3);
+
+  // 2. Robust Extraction (Find outer braces)
+  const firstBrace = jsonStr.indexOf("{");
+  const lastBrace = jsonStr.lastIndexOf("}");
+
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+  }
+
+  // 3. Strip Comments (Crucial for "jsx" or commented lines)
+  jsonStr = stripComments(jsonStr);
+
+  // 4. Handle Double Braces (Common LLM Hallucination)
+  // Logic: If it starts with "{{", replace with "{". Same for end "}}".
+  if (jsonStr.startsWith("{{")) {
+    jsonStr = jsonStr.replace("{{", "{");
+  }
+  if (jsonStr.endsWith("}}")) {
+    jsonStr = jsonStr.substring(0, jsonStr.length - 2) + "}";
+  }
+
+  // 4. Attempt Parsing with Strategies
   const strategies = [
-    // Strategy 1: Parse as-is
+    // A: Clean Parse
     () => JSON.parse(jsonStr),
 
-    // Strategy 2: Find last closing brace and truncate
-    () => {
-      const lastBrace = jsonStr.lastIndexOf("}");
-      if (lastBrace === -1) throw new Error("No closing brace found");
-      const truncated = jsonStr.substring(0, lastBrace + 1);
-      return JSON.parse(truncated);
-    },
-
-    // Strategy 3: Remove trailing commas before closing braces/brackets
+    // B: Remove Trailing Commas (Common LLM error)
     () => {
       const noTrailing = jsonStr
-        .replace(/,(\s*[}\]])/g, "$1") // Remove trailing commas before } or ]
-        .replace(/,(\s*)$/g, "$1"); // Remove trailing comma at end
-      return JSON.parse(noTrailing);
-    },
-
-    // Strategy 4: Combine truncation and comma removal
-    () => {
-      const lastBrace = jsonStr.lastIndexOf("}");
-      if (lastBrace === -1) throw new Error("No closing brace found");
-      const truncated = jsonStr.substring(0, lastBrace + 1);
-      const noTrailing = truncated
         .replace(/,(\s*[}\]])/g, "$1")
         .replace(/,(\s*)$/g, "$1");
       return JSON.parse(noTrailing);
@@ -45,31 +54,76 @@ export function parseRoadmapJSON(content: string): RoadmapData {
   ];
 
   let lastError: Error | null = null;
-
-  for (let i = 0; i < strategies.length; i++) {
+  for (const strategy of strategies) {
     try {
-      const result = strategies[i]();
-      if (i > 0) {
-        console.log(
-          `[JSON-Parser] Successfully parsed using strategy ${i + 1}`
-        );
-      }
-      return result;
-    } catch (error) {
-      lastError = error as Error;
-      continue;
+      return strategy();
+    } catch (e) {
+      lastError = e as Error;
     }
   }
 
-  // All strategies failed
-  throw new Error(
-    `Failed to parse roadmap JSON after ${strategies.length} attempts. Last error: ${lastError?.message}`
-  );
+  throw new Error(`JSON Parse failed: ${lastError?.message}`);
 }
 
 /**
- * Validates that parsed data has required roadmap structure
+ * Strips C-style comments from a string, preserving strings and regex literals.
  */
+function stripComments(str: string): string {
+  let result = "";
+  let i = 0;
+  const len = str.length;
+  let inString = false;
+  let stringChar = ""; // ' or "
+  let inComment = false; // // or /*
+
+  while (i < len) {
+    const char = str[i];
+    const nextChar = str[i + 1];
+
+    if (!inString && !inComment) {
+      if (char === '"') {
+        inString = true;
+        stringChar = '"';
+        result += char;
+        i++;
+        continue;
+      }
+      if (char === "/" && nextChar === "/") {
+        i += 2;
+        while (i < len && str[i] !== "\n" && str[i] !== "\r") i++;
+        continue;
+      }
+      if (char === "/" && nextChar === "*") {
+        i += 2;
+        while (i < len && !(str[i] === "*" && str[i + 1] === "/")) i++;
+        i += 2;
+        continue;
+      }
+    } else if (inString) {
+      if (char === stringChar && str[i - 1] !== "\\") inString = false;
+    }
+
+    if (!inComment) result += char;
+    i++;
+  }
+  return result;
+}
+
+// ============================================================================
+// TYPE-SPECIFIC WRAPPERS
+// ============================================================================
+
+import { RoadmapData } from "../types/roadmap.types";
+import { TopicDetail } from "../types/topic.types";
+
+export function parseRoadmapJSON(content: string): RoadmapData {
+  const parsed = baseParseJSON(content);
+  // Optional: Add specific roadmap validation if needed here,
+  // currently we return strict type but validRoadmapData is called by consumer usually?
+  // Use parseAndValidateRoadmap for full safety.
+  return parsed as RoadmapData;
+}
+
 export function validateRoadmapData(data: any): data is RoadmapData {
   return (
     data &&
@@ -79,31 +133,54 @@ export function validateRoadmapData(data: any): data is RoadmapData {
   );
 }
 
-/**
- * Safely parses and validates roadmap JSON
- */
 export function parseAndValidateRoadmap(content: string): RoadmapData | null {
   try {
-    let parsed = parseRoadmapJSON(content) as any;
+    let parsed = baseParseJSON(content);
 
     // Auto-unwrap common wrappers
     if (parsed.roadmap && typeof parsed.roadmap === "object") {
-      parsed = parsed.roadmap as any;
+      parsed = parsed.roadmap;
     } else if (parsed.data && typeof parsed.data === "object") {
-      parsed = parsed.data as any;
+      parsed = parsed.data;
     }
 
     if (!validateRoadmapData(parsed)) {
-      console.error(
-        "[JSON-Parser] Validation failed: Missing or invalid phases array. Keys found:",
-        Object.keys(parsed)
-      );
+      console.error("[JSON-Parser] Roadmap Validation Failed");
       return null;
     }
-
     return parsed;
   } catch (error) {
-    console.error("[JSON-Parser] Parse error:", error);
+    console.error("[JSON-Parser] Roadmap Parse Error:", error);
     return null;
   }
 }
+
+export function validateTopicDetail(data: any): data is TopicDetail {
+  return (
+    data &&
+    typeof data === "object" &&
+    typeof data.title === "string" && // Strict check
+    typeof data.overview === "string"
+  );
+}
+
+export function parseAndValidateTopicDetail(
+  content: string,
+): TopicDetail | null {
+  try {
+    const parsed = baseParseJSON(content);
+    if (!validateTopicDetail(parsed)) {
+      console.error("[JSON-Parser] Topic Validation Failed");
+      return null;
+    }
+    return parsed;
+  } catch (error) {
+    console.error(
+      `[JSON-Parser] Topic Parse Error: ${(error as Error).message}`,
+    );
+    return null;
+  }
+}
+
+// Deprecated alias for backward compatibility (can remove if verified unused)
+export const robustJsonParse = baseParseJSON;

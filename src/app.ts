@@ -11,6 +11,7 @@ import roadmapRoutes from "./routes/roadmap.routes";
 import chatRoutes from "./routes/chat.routes";
 import progressRoutes from "./routes/progress.routes";
 import userRoutes from "./routes/user.routes";
+import topicRoutes from "./routes/topic.routes";
 import { errorMiddleware } from "./middlewares/error";
 import { errorHandler } from "./middlewares/error-handler";
 // Better Auth removed - using custom JWT authentication
@@ -24,9 +25,7 @@ const app: Express = express();
 const swaggerDocument = YAML.load(path.join(__dirname, "../swagger.yaml"));
 
 // Parse allowed origins from environment variable
-const allowedOrigins = (
-  process.env.ALLOWED_ORIGINS || ""
-)
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
@@ -72,6 +71,7 @@ app.use("/api/roadmap", roadmapRoutes);
 app.use("/api/chats", chatRoutes);
 app.use("/api/roadmap/:roadmapId/progress", progressRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/topic", topicRoutes);
 
 // Root route
 app.get("/", (req, res) => {

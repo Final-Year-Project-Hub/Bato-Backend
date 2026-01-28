@@ -46,6 +46,7 @@ model Roadmap {
   chatSession   ChatSession?     @relation(fields: [chatSessionId], references: [id])
   user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   progress      RoadmapProgress?
+  topicContents TopicContent[]
 
   @@index([userId])
   @@index([userId, isSelected])
@@ -96,6 +97,32 @@ model RoadmapProgress {
 
   @@index([roadmapId])
 }
+
+model TopicContent {
+  id          String   @id @default(uuid())
+  roadmapId   String
+  
+  // Topic identification
+  topicTitle  String
+  phaseNumber Int
+  phaseTitle  String
+  
+  // Generated content (stored as JSON)
+  content     Json
+  
+  // Metadata
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  roadmap     Roadmap  @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  
+  // Ensure one topic content per roadmap/phase/topic combination
+  @@unique([roadmapId, phaseNumber, topicTitle])
+  @@index([roadmapId])
+  @@index([roadmapId, phaseNumber])
+}
+
 
 model UserPreferences {
   userId             String   @id
