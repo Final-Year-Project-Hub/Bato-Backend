@@ -14,6 +14,8 @@ import userRoutes from "./routes/user.routes";
 import topicRoutes from "./routes/topic.routes";
 import { errorMiddleware } from "./middlewares/error";
 import { errorHandler } from "./middlewares/error-handler";
+import passport from "passport";
+import "./lib/passport.ts";
 // Better Auth removed - using custom JWT authentication
 
 const __filename = fileURLToPath(import.meta.url);
@@ -54,6 +56,7 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use(passport.initialize());
 
 // Swagger API Documentation
 app.use(

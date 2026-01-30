@@ -11,8 +11,9 @@ model User {
   name          String?
   email         String                @unique
   emailVerified Boolean               @default(false)
-  image         String?
   password      String?
+  googleId      String?               @unique
+  image         String?
   role          Role                  @default(USER)
   isActive      Boolean               @default(true)
   createdAt     DateTime              @default(now())
@@ -196,6 +197,7 @@ model Ingest {
   @@index([documentId])
   @@index([status])
 }
+
 
 enum Role {
   USER

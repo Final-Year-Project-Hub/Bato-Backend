@@ -153,6 +153,13 @@ export const login = async (
   try {
     const { email, password } = req.body;
 
+    if (!email || !password) {
+      throw new BadRequestException(
+        "Email and password are required",
+        ErrorCode.BAD_REQUEST
+      );
+    }
+
     const user = await prisma.user.findUnique({
       where: { email },
     });
@@ -168,7 +175,14 @@ export const login = async (
       );
     }
 
-    const passwordMatch = await comparePassword(password, user.password!);
+    if (!user.password) {
+      throw new BadRequestException(
+        "Invalid credentials",
+        ErrorCode.INVALID_CREDENTIALS,
+      );
+    }
+
+    const passwordMatch = await comparePassword(password, user.password);
     if (!passwordMatch) {
       throw new BadRequestException(
         "Invalid credentials",
