@@ -55,7 +55,7 @@ router.route("/google/callback").get(passport.authenticate("google", { failureRe
       res.cookie("accessToken", accessToken, cookieOptions);
       res.cookie("refreshToken", refreshToken, cookieOptions);
 
-      return res.redirect(`${process.env.FRONTEND_URL}/profile?message=Login successful`);
+      return res.redirect(`${process.env.FRONTEND_URL}/chat`);
     } catch (err) {
       next(err);
     }
