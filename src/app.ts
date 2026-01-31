@@ -26,6 +26,16 @@ const app: Express = express();
 // Load Swagger documentation
 const swaggerDocument = YAML.load(path.join(__dirname, "../swagger.yaml"));
 
+// Swagger API Documentation
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerDocument, {
+    customCss: ".swagger-ui .topbar { display: none }",
+    customSiteTitle: "Bato-AI API Documentation",
+  }),
+);
+
 // Parse allowed origins from environment variable
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
@@ -57,16 +67,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(passport.initialize());
-
-// Swagger API Documentation
-app.use(
-  "/api-docs",
-  swaggerUi.serve,
-  swaggerUi.setup(swaggerDocument, {
-    customCss: ".swagger-ui .topbar { display: none }",
-    customSiteTitle: "Bato-AI API Documentation",
-  }),
-);
 
 // Routes
 app.use("/auth", authRoutes);
