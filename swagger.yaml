@@ -876,13 +876,19 @@ paths:
                     type: string
 
   # ==================== Topic Endpoints ====================
-  /api/topic/{phaseNumber}/{topicTitle}:
+  /api/topic/stream/{phaseNumber}/{topicTitle}:
     get:
-      summary: Get topic deep-dive
+      summary: Stream topic deep-dive (SSE)
       description: |
-        Retrieve detailed educational content for a specific topic within a roadmap phase.
-        This endpoint proxies to the Bato-Ai FastAPI backend which generates comprehensive
-        learning content using Groq LLM and RAG-based documentation retrieval.
+        Streams detailed educational content for a specific topic using Server-Sent Events (SSE).
+
+        Behavior:
+        - If `roadmapId` is provided and cached content exists, the API returns a single SSE `data:` event immediately and closes the connection.
+        - If no cache exists, the API proxies a streaming response from the FastAPI service and forwards chunks as SSE.
+
+        Notes:
+        - Response is `text/event-stream`
+        - Client should use EventSource (or SSE-compatible client) to consume the stream.
       tags:
         - Topic
       security:
@@ -897,6 +903,7 @@ paths:
             type: integer
             minimum: 1
           example: 1
+
         - name: topicTitle
           in: path
           required: true
@@ -904,6 +911,7 @@ paths:
           schema:
             type: string
           example: "Components"
+
         - name: phaseTitle
           in: query
           required: true
@@ -911,6 +919,7 @@ paths:
           schema:
             type: string
           example: "Fundamentals"
+
         - name: goal
           in: query
           required: true
@@ -918,13 +927,37 @@ paths:
           schema:
             type: string
           example: "Learn React"
+
+        - name: roadmapId
+          in: query
+          required: false
+          description: Optional roadmap UUID for server-side caching lookup
+          schema:
+            type: string
+            format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+
       responses:
         "200":
-          description: Topic details retrieved successfully
+          description: SSE stream of topic detail content (may be chunked)
           content:
-            application/json:
+            text/event-stream:
               schema:
-                $ref: "#/components/schemas/TopicDetail"
+                type: string
+                description: |
+                  SSE stream. Events typically contain `data: <chunk>\n\n`.
+                  If cached, a single event is sent containing the complete TopicDetail JSON.
+              examples:
+                cached_single_event:
+                  summary: Cached response (single event)
+                  value: |
+                    data: {"title":"Components","phase_number":1,"phase_title":"Fundamentals","overview":"..."}\n\n
+                streamed_chunks:
+                  summary: Streamed chunks (multiple events)
+                  value: |
+                    data: {"title":"Components","phase_number":1,"phase_title":"Fundamentals","overview":"Par"}\n\n
+                    data: tial chunk ...\n\n
+
         "400":
           description: Invalid request parameters
           content:
@@ -939,33 +972,24 @@ paths:
                     type: array
                     items:
                       type: object
+
         "401":
           description: Unauthorized - authentication required
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        "404":
-          description: Topic not found
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: "Topic not found"
-        "500":
-          description: Failed to fetch topic detail
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: "Failed to fetch topic detail"
 
+        "500":
+          description: Failed to stream topic detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "FastAPI stream failed: Internal Server Error"
   # ==================== Chat Endpoints ====================
   /api/chats:
     post:
