@@ -876,7 +876,7 @@ paths:
                     type: string
 
   # ==================== Topic Endpoints ====================
-    /api/topic/stream/{phaseNumber}/{topicTitle}:
+  /api/topic/stream/{phaseNumber}/{topicTitle}:
     get:
       summary: Stream topic deep-dive (SSE)
       description: |
