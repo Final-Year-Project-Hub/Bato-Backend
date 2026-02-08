@@ -876,7 +876,7 @@ paths:
                     type: string
 
   # ==================== Topic Endpoints ====================
-  /api/topic/stream/{phaseNumber}/{topicTitle}:
+  /api/topic/stream/{phaseId}/{topicId}:
     get:
       summary: Stream topic deep-dive (SSE)
       description: |
@@ -990,6 +990,57 @@ paths:
                   error:
                     type: string
                     example: "FastAPI stream failed: Internal Server Error"
+  
+  /api/topic/{phaseId}/{topicId}:
+    get:
+      summary: Get detailed topic content
+      description: Retrieve topic details using phaseId and topicId
+      tags:
+        - Topic
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: phaseId
+          in: path
+          schema:
+            type: string
+          required: true
+        - name: topicId
+          in: path
+          schema:
+            type: string
+          required: true
+        - name: goal
+          in: query
+          schema:
+            type: string
+          required: true
+        - name: roadmapId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          required: true
+      responses:
+        "200":
+          description: Topic details fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopicDetail"
+        "400":
+          description: Invalid request parameters or user not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: "FastAPI stream failed: Internal Server Error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   # ==================== Chat Endpoints ====================
   /api/chats:

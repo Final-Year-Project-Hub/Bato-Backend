@@ -194,7 +194,6 @@ export function ensureRoadmapIds(roadmapData: any) {
     const topicsWithIds = topics.map((topic: any, tIndex: number) => ({
       ...topic,
       id: topic.id || randomUUID(),
-      // optional: add ordering fields if you want
       order: topic.order ?? tIndex + 1,
     }));
 

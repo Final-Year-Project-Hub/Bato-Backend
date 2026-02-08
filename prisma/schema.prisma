@@ -102,6 +102,9 @@ model RoadmapProgress {
 model TopicContent {
   id          String   @id @default(uuid())
   roadmapId   String
+  phaseId   String
+  topicId   String
+
   
   // Topic identification
   topicTitle  String
@@ -119,9 +122,9 @@ model TopicContent {
   roadmap     Roadmap  @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
   
   // Ensure one topic content per roadmap/phase/topic combination
-  @@unique([roadmapId, phaseNumber, topicTitle])
+  @@unique([roadmapId, phaseId, topicId])
   @@index([roadmapId])
-  @@index([roadmapId, phaseNumber])
+  @@index([roadmapId, phaseId])
 }
 
 
