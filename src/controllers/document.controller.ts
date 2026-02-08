@@ -100,7 +100,7 @@ export async function uploadDocument(req: Request, res: Response) {
     });
 
     // Call AI service to extract from local file
-    const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
+    const aiServiceUrl = process.env.FASTAPI_URL || "http://localhost:8000";
 
     try {
       const extractResponse = await fetch(
