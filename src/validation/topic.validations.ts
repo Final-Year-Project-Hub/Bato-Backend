@@ -5,8 +5,8 @@ import { z } from "zod";
  */
 
 export const TopicDetailParamsSchema = z.object({
-  topicId: z.string().uuid("Invalid topic ID"),
-  phaseId: z.string().uuid("Invalid phase ID"),
+  topicId: z.string().min(1, "Topic ID is required"),
+  phaseId: z.string().min(1, "Phase ID is required"),
 });
 
 export const TopicDetailQuerySchema = z.object({
