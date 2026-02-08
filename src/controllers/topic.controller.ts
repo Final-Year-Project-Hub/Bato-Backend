@@ -240,10 +240,20 @@ export async function getTopicStream(req: Request, res: Response) {
       }
     }
 
+    console.log(`[Topic Stream] Extracted values:`, {
+      phaseNumber,
+      topicTitle,
+      phaseTitle,
+      phaseId,
+      topicId,
+    });
+
     // ✅ 2) Call FastAPI stream using extracted values
     const fastApiUrl = process.env.FASTAPI_URL || DEFAULT_FASTAPI_URL;
 
     const endpoint = `${fastApiUrl}/api/v1/topic/stream/${phaseNumber}/${encodeURIComponent(topicTitle)}?phase_title=${encodeURIComponent(phaseTitle)}&goal=${encodeURIComponent(goal)}`;
+
+    console.log(`[Topic Stream] Calling FastAPI endpoint: ${endpoint}`);
 
     const response = await fetch(endpoint, {
       method: "GET",
