@@ -292,6 +292,36 @@ components:
             type: string
             format: uri
 
+    TopicContent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        roadmapId:
+          type: string
+          format: uuid
+        phaseId:
+          type: string
+          format: uuid
+        topicId:
+          type: string
+          format: uuid
+        topicTitle:
+          type: string
+        phaseNumber:
+          type: integer
+        phaseTitle:
+          type: string
+        content:
+          $ref: "#/components/schemas/TopicDetail"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
 paths:
   /:
     get:

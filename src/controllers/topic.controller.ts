@@ -35,15 +35,18 @@ export async function getTopicDetail(req: Request, res: Response) {
     console.log(`[Topic] Fetching detail for topicId=${topicId}, phaseId=${phaseId}`);
 
     // ✅ 1) Cache lookup by IDs
-    const cachedContent = await prisma.topicContent.findUnique({
-      where: {
-        roadmapId_phaseId_topicId: {
-          roadmapId,
-          phaseId,
-          topicId,
+    let cachedContent = null;
+    if (roadmapId) {
+      cachedContent = await prisma.topicContent.findUnique({
+        where: {
+          roadmapId_phaseId_topicId: {
+            roadmapId,
+            phaseId,
+            topicId,
+          },
         },
-      },
-    });
+      });
+    }
 
     if (cachedContent) {
       console.log(`[Topic] ✅ Returning cached content`);
@@ -82,21 +85,39 @@ export async function getTopicDetail(req: Request, res: Response) {
     const topicDetail = await response.json();
 
     // ✅ 3) Cache by IDs
-    try {
-      await prisma.topicContent.create({
-        data: {
-          roadmapId,
-          phaseId,
-          topicId,
-          content: topicDetail,
-        },
-      });
-      console.log(`[Topic] 💾 Cached content in database`);
-    } catch (cacheError) {
-      // ignore duplicates
-      console.warn(`[Topic] ⚠️ Failed to cache content:`, cacheError);
+    let newContent;
+    if (roadmapId) {
+      try {
+        newContent = await prisma.topicContent.create({
+          data: {
+            roadmapId,
+            phaseId,
+            topicId,
+            topicTitle: topicDetail.title,
+            phaseNumber: topicDetail.phase_number,
+            phaseTitle: topicDetail.phase_title,
+            content: topicDetail,
+          },
+        });
+        console.log(`[Topic] 💾 Cached content in database`);
+      } catch (cacheError) {
+        // ignore duplicates - try to fetch existing if create failed
+        console.warn(`[Topic] ⚠️ Failed to cache content (might already exist):`, cacheError);
+        newContent = await prisma.topicContent.findUnique({
+          where: {
+            roadmapId_phaseId_topicId: {
+              roadmapId,
+              phaseId,
+              topicId,
+            },
+          },
+        });
+      }
     }
 
+
+    // ... (cache creation logic remains) ...
+    // Revert to returning only the inner content
     return res.json(topicDetail);
   } catch (error: any) {
     console.error("[Topic] Error fetching topic detail:", error);
@@ -140,15 +161,18 @@ export async function getTopicStream(req: Request, res: Response) {
     res.setHeader("Connection", "keep-alive");
 
     // ✅ 1) Cache lookup by IDs
-    const cachedContent = await prisma.topicContent.findUnique({
-      where: {
-        roadmapId_phaseId_topicId: {
-          roadmapId,
-          phaseId,
-          topicId,
+    let cachedContent = null;
+    if (roadmapId) {
+      cachedContent = await prisma.topicContent.findUnique({
+        where: {
+          roadmapId_phaseId_topicId: {
+            roadmapId,
+            phaseId,
+            topicId,
+          },
         },
-      },
-    });
+      });
+    }
 
     if (cachedContent) {
       console.log(`[Topic Stream] ✅ Returning cached content immediately`);
@@ -205,16 +229,22 @@ export async function getTopicStream(req: Request, res: Response) {
         return;
       }
 
-      await prisma.topicContent.create({
-        data: {
-          roadmapId,
-          phaseId,
-          topicId,
-          content: parsed as any,
-        },
-      });
+      if (roadmapId) {
+        await prisma.topicContent.create({
+          data: {
+            roadmapId,
+            phaseId,
+            topicId,
+            topicTitle: parsed.title,
+            phaseNumber: parsed.phase_number,
+            phaseTitle: parsed.phase_title,
+            content: parsed as any,
+          },
+        });
+        console.log(`[Topic Stream] 💾 Cached complete streamed content`);
+      }
 
-      console.log(`[Topic Stream] 💾 Cached complete streamed content`);
+
     } catch (cacheError) {
       console.warn(`[Topic Stream] ⚠️ Failed to parse/cache streamed content:`, cacheError);
     }
