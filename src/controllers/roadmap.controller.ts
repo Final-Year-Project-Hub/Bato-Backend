@@ -7,7 +7,10 @@ import {
   GetRoadmapsQuerySchema,
   RoadmapIdParamSchema,
 } from "../validation/roadmap.validations";
-import { parseAndValidateRoadmap } from "../utils/json-parser";
+import {
+  ensureRoadmapIds,
+  parseAndValidateRoadmap,
+} from "../utils/json-parser";
 import {
   UserContext,
   FastAPIStreamPayload,
@@ -204,23 +207,23 @@ export async function generateRoadmapStream(req: Request, res: Response) {
 
         // Parse and validate roadmap data using utility
         const roadmapData = parseAndValidateRoadmap(fullContent);
-
+        const roadmapDataWithIds = ensureRoadmapIds(roadmapData);
         if (roadmapData) {
           const savedRoadmap = await prisma.roadmap.create({
             data: {
               userId: user.id,
-              chatSessionId: chatSessionId, // Use extracted variable
-              title: roadmapData.goal || "Untitled Roadmap",
-              goal: roadmapData.goal,
-              intent: roadmapData.intent || "learn",
-              proficiency: roadmapData.proficiency || "beginner",
-              roadmapData: roadmapData as any,
-              message: message,
+              chatSessionId,
+              title: roadmapDataWithIds.goal || "Untitled Roadmap",
+              goal: roadmapDataWithIds.goal,
+              intent: roadmapDataWithIds.intent || "learn",
+              proficiency: roadmapDataWithIds.proficiency || "beginner",
+              roadmapData: roadmapDataWithIds, //save with internal ids
+              message,
             },
           });
 
           console.log(
-            `[Roadmap-Stream] ✅ Saved roadmap to DB: ${savedRoadmap.id}`,
+            `[Roadmap-Stream] Saved roadmap to DB: ${savedRoadmap.id}`,
           );
 
           // Emit the roadmap ID so client can link it
