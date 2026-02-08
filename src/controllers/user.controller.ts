@@ -3,7 +3,7 @@ import { hashPassword } from "../utils/hash";
 import { prisma } from "../lib/prisma";
 import { ApiResponse } from "@/utils/apiResponse";
 import { BadRequestException, ErrorCode } from "@/utils/root";
-import { uploadToCloudinary } from "@/lib/cloudinary";
+import { uploadToCloudinary } from "../utils/uploadCloudinary";
 
 import { createAndSendOtp } from "../utils/otp";
 
@@ -76,43 +76,35 @@ export const editUser = async(req:Request,res:Response,next:NextFunction)=>{
     }
 }
 
-// export const userProfile = async(req:Request,res:Response,next:NextFunction)=>{
-//    try {
-//     const image = req.file
-//     if(!image){
-//         throw new BadRequestException("No file uploaded",ErrorCode.BAD_REQUEST)
-//     }
-//     console.log(image)
-//     console.log(image.path)
-//     const localFilePath = image.path;
-//     const cloudinaryResponse = await uploadToCloudinary(localFilePath);
+export const userProfileImage = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const image = req.file;
+    if (!image) {
+      return res.status(400).json({ message: "Image is required" });
+    }
 
-//     if(!cloudinaryResponse){
-//         throw new BadRequestException("Failed to upload image to cloud", ErrorCode.BAD_REQUEST);
-//     }
-    
-//     // Update user in DB
-//     const updatedUser = await prisma.user.update({
-//         where: { id: req.user?.id },
-//         data: {
-//             image: cloudinaryResponse.secure_url
-//         },
-//          select:{
-//                 id:true,
-//                 name:true,
-//                 email:true,
-//                 image: true,
-//                 createdAt:true,
-//                 updatedAt:true,
-//                 role:true,
-//             },
-//     });
+    const uploadResult = await uploadToCloudinary(image.buffer, "users");
 
-//     res.status(200).json(new ApiResponse("Profile image updated successfully", updatedUser));
-//    } catch (error) {
-//     next(error)
-//    }
-// }
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user?.id }, // assuming auth middleware
+      data: {
+        image: uploadResult.secure_url,
+      },
+    });
+
+    res.status(200).json({
+        updatedUser,
+      message: "Profile image updated",
+      image: uploadResult.secure_url,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 
 export const deleteUser = async (req: Request, res: Response, next: NextFunction) => {
@@ -132,3 +124,55 @@ export const deleteUser = async (req: Request, res: Response, next: NextFunction
         next(error);
     }
 }
+
+export const getUserById = async (req: Request, res: Response, next: NextFunction) => {
+    const userId = req.params.id as string;
+    if (!userId) {
+        throw new BadRequestException("User ID is required", ErrorCode.BAD_REQUEST);
+    }
+
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+                role: true,
+                createdAt: true,
+                updatedAt: true,
+            },
+        });
+
+        if (!user) {
+            throw new BadRequestException("User not found", ErrorCode.USER_NOT_FOUND);
+        }
+
+        res.status(200).json(new ApiResponse("User fetched successfully", user));
+
+    } catch (error) {
+        next(error);
+    }
+} 
+
+export const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const users = await prisma.user.findMany({
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+                role: true,
+                createdAt: true,
+                updatedAt: true,
+            },
+        });
+
+        res.status(200).json(new ApiResponse("Users fetched successfully", users));
+
+    } catch (error) {
+        next(error);
+    }
+} 

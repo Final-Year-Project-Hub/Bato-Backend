@@ -14,13 +14,12 @@ router.use(verifyUser);
  * @query phaseTitle - Title of the phase this topic belongs to
  * @query goal - Original roadmap goal (e.g., 'Learn React')
  */
-router.get("/:phaseNumber/:topicTitle", errorHandler(getTopicDetail));
+router.get("/:phaseId/:topicId", getTopicDetail);
 
 /**
  * Stream detailed topic content
  * @route GET /api/topic/stream/:phaseNumber/:topicTitle
  */
 import { getTopicStream } from "../controllers/topic.controller";
-router.get("/stream/:phaseNumber/:topicTitle", errorHandler(getTopicStream));
-
+router.get("/stream/:phaseId/:topicId", getTopicStream);
 export default router;

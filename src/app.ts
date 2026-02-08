@@ -16,6 +16,8 @@ import quizRoutes from "./routes/quiz.routes";
 import documentRoutes from "./routes/document.routes.js";
 import { errorMiddleware } from "./middlewares/error";
 import { errorHandler } from "./middlewares/error-handler";
+import passport from "passport";
+import "./lib/passport.ts";
 // Better Auth removed - using custom JWT authentication
 
 const __filename = fileURLToPath(import.meta.url);
@@ -25,6 +27,16 @@ const app: Express = express();
 
 // Load Swagger documentation
 const swaggerDocument = YAML.load(path.join(__dirname, "../swagger.yaml"));
+
+// Swagger API Documentation
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerDocument, {
+    customCss: ".swagger-ui .topbar { display: none }",
+    customSiteTitle: "Bato-AI API Documentation",
+  }),
+);
 
 // Parse allowed origins from environment variable
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
@@ -56,16 +68,7 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-
-// Swagger API Documentation
-app.use(
-  "/api-docs",
-  swaggerUi.serve,
-  swaggerUi.setup(swaggerDocument, {
-    customCss: ".swagger-ui .topbar { display: none }",
-    customSiteTitle: "Bato-AI API Documentation",
-  }),
-);
+app.use(passport.initialize());
 
 // Routes
 app.use("/auth", authRoutes);

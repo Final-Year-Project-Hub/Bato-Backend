@@ -11,8 +11,9 @@ model User {
   name          String?
   email         String                @unique
   emailVerified Boolean               @default(false)
-  image         String?
   password      String?
+  googleId      String?               @unique
+  image         String?
   role          Role                  @default(USER)
   isActive      Boolean               @default(true)
   createdAt     DateTime              @default(now())
@@ -103,6 +104,9 @@ model RoadmapProgress {
 model TopicContent {
   id          String   @id @default(uuid())
   roadmapId   String
+  phaseId   String
+  topicId   String
+
   
   // Topic identification
   topicTitle  String
@@ -124,9 +128,9 @@ model TopicContent {
   quizAttempts QuizAttempt[]
   
   // Ensure one topic content per roadmap/phase/topic combination
-  @@unique([roadmapId, phaseNumber, topicTitle])
+  @@unique([roadmapId, phaseId, topicId])
   @@index([roadmapId])
-  @@index([roadmapId, phaseNumber])
+  @@index([roadmapId, phaseId])
 }
 
 

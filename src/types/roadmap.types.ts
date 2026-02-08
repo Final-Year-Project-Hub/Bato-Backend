@@ -2,6 +2,7 @@
  * Roadmap phase structure
  */
 export interface RoadmapPhase {
+  id: string;
   phase_number: number;
   phase_title: string;
   description: string;
@@ -13,6 +14,7 @@ export interface RoadmapPhase {
  * Roadmap topic structure
  */
 export interface RoadmapTopic {
+  id: string;
   topic_name: string;
   description: string;
   resources: RoadmapResource[];

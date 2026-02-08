@@ -29,56 +29,82 @@ export async function getTopicDetail(req: Request, res: Response) {
   }
 
   try {
-    // Validate path parameters
-    const validatedParams = TopicDetailParamsSchema.parse(req.params);
-    const { phaseNumber, topicTitle } = validatedParams;
+    const { phaseId, topicId } = TopicDetailParamsSchema.parse(req.params);
+    const { goal, roadmapId } = TopicDetailQuerySchema.parse(req.query);
+    // Fetch roadmap data to extract phaseNumber and topicTitle
+    const roadmap = await prisma.roadmap.findUnique({
+      where: {
+        id: roadmapId,
+      },
+      select: {
+        roadmapData: true,
+      },
+    });
 
-    // Validate query parameters
-    const validatedQuery = TopicDetailQuerySchema.parse(req.query);
-    const { phaseTitle, goal, roadmapId } = validatedQuery;
+    // Extract phaseNumber, topicTitle, and phaseTitle from roadmapData JSON
+    let phaseNumber = 0;
+    let topicTitle = "Unknown Topic";
+    let phaseTitle = "Unknown Phase";
+    
+    if (roadmap?.roadmapData) {
+      const roadmapData = roadmap.roadmapData as any;
+      const phases = roadmapData.phases || [];
+      
+      // Find the phase and topic by their IDs
+      const phase = phases.find((p: any) => p.id === phaseId);
+      if (phase) {
+        phaseNumber = phase.phase_number || 0;
+        phaseTitle = phase.title || "Unknown Phase";
+        const topic = phase.topics?.find((t: any) => t.id === topicId);
+        if (topic) {
+          topicTitle = topic.title || "Unknown Topic";
+        }
+      }
+    } 
 
     console.log(
-      `[Topic] Fetching detail for: ${topicTitle} (Phase ${phaseNumber})`,
-    );
+          `[Topic] Fetching detail for: ${topicTitle} (Phase ${phaseNumber})`,
+        );
+    console.log(`[Topic] Fetching detail for topicId=${topicId}, phaseId=${phaseId}`);
 
-    // Check if we have cached content in database
+    // ✅ 1) Cache lookup by IDs
+    let cachedContent = null;
     if (roadmapId) {
-      const cachedContent = await prisma.topicContent.findUnique({
+      cachedContent = await prisma.topicContent.findUnique({
         where: {
-          roadmapId_phaseNumber_topicTitle: {
+          roadmapId_phaseId_topicId: {
             roadmapId,
-            phaseNumber,
-            topicTitle,
+            phaseId,
+            topicId,
           },
         },
       });
+    }
 
       if (cachedContent) {
         console.log(`[Topic] ✅ Returning cached content from database`);
-        return res.json({
-          ...(cachedContent.content as Record<string, any>),
-          topicContentId: cachedContent.id, // Add topicContentId for quiz feature
-        });
+        return res.json(cachedContent.content);
       }
-    }
+    
 
-    // No cache found, fetch from Bato-Ai
-    console.log(`[Topic] 🔄 Fetching from Bato-Ai (not cached)`);
+    console.log(`[Topic] Fetching from FastAPI (not cached)`);
 
-    // Get FastAPI URL
+    // ✅ 2) Call FastAPI using IDs (you must implement this endpoint in FastAPI)
     const fastApiUrl = process.env.FASTAPI_URL || DEFAULT_FASTAPI_URL;
 
-    // Construct FastAPI endpoint URL
+    // Example ID-based endpoint:
+    // GET /api/v1/topic/{phaseId}/{topicId}?goal=...
+    // const endpoint =
+    //   `${fastApiUrl}/api/v1/topic/${phaseId}/${topicId}` +
+    //   `?goal=${encodeURIComponent(goal)}`;
+
     const endpoint = `${fastApiUrl}/api/v1/topic/${phaseNumber}/${encodeURIComponent(topicTitle)}?phase_title=${encodeURIComponent(phaseTitle)}&goal=${encodeURIComponent(goal)}`;
 
     console.log(`[Topic] Calling FastAPI: ${endpoint}`);
 
-    // Forward request to FastAPI
     const response = await fetch(endpoint, {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
     });
 
     if (!response.ok) {
@@ -95,21 +121,21 @@ export async function getTopicDetail(req: Request, res: Response) {
     const topicDetail = await response.json();
 
     // Cache the content in database if roadmapId is provided
-    let topicContentId: string | undefined;
     if (roadmapId) {
       try {
         const createdContent = await prisma.topicContent.create({
           data: {
             roadmapId,
-            topicTitle,
-            phaseNumber,
-            phaseTitle,
-            content: topicDetail,
+            phaseId,
+            topicId,
+            topicTitle: topicDetail.title || "Untitled Topic",
+            phaseNumber: topicDetail.phase_number || 0,
+            phaseTitle: topicDetail.phase_title || "Untitled Phase",
+            content: topicDetail as any,
           },
         });
-        topicContentId = createdContent.id;
         console.log(
-          `[Topic] 💾 Cached content in database with ID: ${topicContentId}`,
+          `[Topic] 💾 Cached content in database with ID: ${createdContent.id}`,
         );
       } catch (cacheError) {
         // If caching fails (e.g., duplicate), just log and continue
@@ -119,25 +145,23 @@ export async function getTopicDetail(req: Request, res: Response) {
 
     console.log(`[Topic] ✅ Successfully fetched topic detail`);
 
-    res.json({
-      ...topicDetail,
-      topicContentId, // Add topicContentId if available
-    });
+    res.json(topicDetail);
   } catch (error: any) {
     console.error("[Topic] Error fetching topic detail:", error);
 
-    if (error.name === "ZodError") {
+    if (error?.name === "ZodError") {
       return res.status(400).json({
         error: "Invalid request parameters",
         details: error.errors,
       });
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       error: error.message || "Failed to fetch topic detail",
     });
   }
 }
+
 
 /**
  * Stream detailed topic content (Server-Sent Events)
@@ -153,73 +177,84 @@ export async function getTopicStream(req: Request, res: Response) {
   }
 
   try {
-    // Validate path parameters
-    const validatedParams = TopicDetailParamsSchema.parse(req.params);
-    const { phaseNumber, topicTitle } = validatedParams;
+    const { phaseId, topicId } = TopicDetailParamsSchema.parse(req.params);
+    const { goal, roadmapId } = TopicDetailQuerySchema.parse(req.query);
 
-    // Validate query parameters
-    const validatedQuery = TopicDetailQuerySchema.parse(req.query);
-    const { phaseTitle, goal, roadmapId } = validatedQuery;
+    console.log(`[Topic Stream] Starting stream for topicId=${topicId}, phaseId=${phaseId}`);
 
-    console.log(
-      `[Topic Stream] Starting stream for: ${topicTitle} (Phase ${phaseNumber})`,
-    );
-
-    // Check if we have cached content in database
-    if (roadmapId) {
-      const cachedContent = await prisma.topicContent.findUnique({
-        where: {
-          roadmapId_phaseNumber_topicTitle: {
-            roadmapId,
-            phaseNumber,
-            topicTitle,
-          },
-        },
-      });
-
-      if (cachedContent) {
-        console.log(`[Topic Stream] ✅ Returning cached content immediately`);
-        // Send as a single SSE event with topicContentId
-        res.setHeader("Content-Type", "text/event-stream");
-        res.setHeader("Cache-Control", "no-cache");
-        res.setHeader("Connection", "keep-alive");
-        const contentWithId = {
-          ...(cachedContent.content as Record<string, any>),
-          topicContentId: cachedContent.id,
-        };
-        res.write(`data: ${JSON.stringify(contentWithId)}\n\n`);
-        return res.end();
-      }
-    }
-
-    // No cache found, stream from Bato-Ai
-    console.log(`[Topic Stream] 🔄 Streaming from Bato-Ai`);
-
-    // Get FastAPI URL
-    const fastApiUrl = process.env.FASTAPI_URL || DEFAULT_FASTAPI_URL;
-    const endpoint = `${fastApiUrl}/api/v1/topic/stream/${phaseNumber}/${encodeURIComponent(topicTitle)}?phase_title=${encodeURIComponent(phaseTitle)}&goal=${encodeURIComponent(goal)}`;
-
-    // Set SSE headers
+    // ✅ SSE headers
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
 
-    // Fetch from FastAPI with response streaming
+    // ✅ 1) Cache lookup by IDs
+    let cachedContent = null;
+    if (roadmapId) {
+      cachedContent = await prisma.topicContent.findUnique({
+        where: {
+          roadmapId_phaseId_topicId: {
+            roadmapId,
+            phaseId,
+            topicId,
+          },
+        },
+      });
+    }
+
+      if (cachedContent) {
+        console.log(`[Topic Stream] ✅ Returning cached content immediately`);
+        // Send as a single SSE event
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+        res.write(`data: ${JSON.stringify(cachedContent.content)}\n\n`);
+        return res.end();
+      }
+    }
+
+    console.log(`[Topic Stream] Streaming from FastAPI (not cached)`);
+
+    // Extract phaseNumber, topicTitle, and phaseTitle from roadmapData
+    const roadmap = await prisma.roadmap.findUnique({
+      where: { id: roadmapId },
+      select: { roadmapData: true },
+    });
+
+    let phaseNumber = 0;
+    let topicTitle = "Unknown Topic";
+    let phaseTitle = "Unknown Phase";
+    
+    if (roadmap?.roadmapData) {
+      const roadmapData = roadmap.roadmapData as any;
+      const phases = roadmapData.phases || [];
+      
+      const phase = phases.find((p: any) => p.id === phaseId);
+      if (phase) {
+        phaseNumber = phase.phase_number || 0;
+        phaseTitle = phase.title || "Unknown Phase";
+        const topic = phase.topics?.find((t: any) => t.id === topicId);
+        if (topic) {
+          topicTitle = topic.title || "Unknown Topic";
+        }
+      }
+    }
+
+    // ✅ 2) Call FastAPI stream using extracted values
+    const fastApiUrl = process.env.FASTAPI_URL || DEFAULT_FASTAPI_URL;
+
+    const endpoint = `${fastApiUrl}/api/v1/topic/stream/${phaseNumber}/${encodeURIComponent(topicTitle)}?phase_title=${encodeURIComponent(phaseTitle)}&goal=${encodeURIComponent(goal)}`;
+
     const response = await fetch(endpoint, {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
     });
 
     if (!response.ok || !response.body) {
       throw new Error(`FastAPI stream failed: ${response.statusText}`);
     }
 
-    // Accumulate chunks for caching
     let fullResponse = "";
 
-    // Pipe stream to client and accumulate
     // @ts-ignore
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -231,74 +266,71 @@ export async function getTopicStream(req: Request, res: Response) {
       const chunk = decoder.decode(value, { stream: true });
       fullResponse += chunk;
 
-      // Allow passing through raw chunks to frontend (frontend must handle partial JSON)
+      // pass-through stream to client
       res.write(chunk);
     }
 
     res.end();
 
-    // After stream ends, try to parse and cache
-    if (roadmapId) {
-      try {
-        // Clean up SSE format "data: ...\n\n" if present
-        // Actually the raw stream from python is just chunks, but if Python wraps in SSE we need to parse
-        // Our Python implementation yielded raw content, but wrapped in StreamingResponse(media_type="text/event-stream")
-        // Uvicorn might wrap it. Let's assume for now we need to robustly parse the accumulated string.
+    // ✅ 3) Parse and cache after stream ends
+    try {
+      const { parseAndValidateTopicDetail } = await import("../utils/json-parser");
+      const parsed = parseAndValidateTopicDetail(fullResponse);
 
-        // Note: We need to be careful here. The chunks might be raw text.
-        // Let's attempt to repair/parse the accumulated JSON string
-        // We might need a utility here or just trust the full string is valid JSON
+      if (!parsed) {
+        console.warn(`[Topic Stream] ⚠️ Parsed JSON but schema validation failed — not caching`);
+        return;
+      }
 
-        // Note: The stream from Python yields raw chunks of the JSON.
-        // However, there might be markdown wrappers (```json ... ```) or other artifacts
-        // if the model didn't follow instructions perfectly.
+      if (roadmapId) {
+        // Extract phaseNumber, topicTitle, and phaseTitle from roadmapData
+        const roadmap = await prisma.roadmap.findUnique({
+          where: { id: roadmapId },
+          select: { roadmapData: true },
+        });
 
-        let jsonContent;
-        try {
-          // Use robust parser with strict TopicDetail validation
-          const { parseAndValidateTopicDetail } =
-            await import("../utils/json-parser");
-          const parsed = parseAndValidateTopicDetail(fullResponse);
+        let phaseNumber = parsed.phase_number || 0;
+        let topicTitle = parsed.title || "Unknown Topic";
+        let phaseTitle = parsed.phase_title || "Unknown Phase";
 
-          if (!parsed) {
-            console.warn(
-              `[Topic Stream] ⚠️ JSON valid but schema validation failed`,
-            );
-            return; // Don't cache invalid schema
+        // Try to get more accurate data from roadmapData if available
+        if (roadmap?.roadmapData) {
+          const roadmapData = roadmap.roadmapData as any;
+          const phases = roadmapData.phases || [];
+          const phase = phases.find((p: any) => p.id === phaseId);
+          if (phase) {
+            phaseNumber = phase.phase_number || phaseNumber;
+            phaseTitle = phase.title || phaseTitle;
+            const topic = phase.topics?.find((t: any) => t.id === topicId);
+            if (topic) {
+              topicTitle = topic.title || topicTitle;
+            }
           }
-          jsonContent = parsed;
-        } catch (e: any) {
-          console.warn(`[Topic Stream] ⚠️ JSON parse failed: ${e.message}`);
-          console.warn(
-            `[Topic Stream] ❌ JSON content start: ${fullResponse.substring(0, 100)}...`,
-          );
-          return;
         }
 
         await prisma.topicContent.create({
           data: {
             roadmapId,
+            phaseId,
+            topicId,
             topicTitle,
             phaseNumber,
             phaseTitle,
-            content: jsonContent as Record<string, any>,
+            content: parsed as any,
           },
         });
-        console.log(`[Topic Stream] 💾 Cached complete content in database`);
-      } catch (cacheError) {
-        console.warn(
-          `[Topic Stream] ⚠️ Failed to cache streamed content:`,
-          cacheError,
-        );
+        console.log(`[Topic Stream] 💾 Cached complete streamed content`);
       }
+
+
+    } catch (cacheError) {
+      console.warn(`[Topic Stream] ⚠️ Failed to parse/cache streamed content:`, cacheError);
     }
   } catch (error: any) {
     console.error("[Topic Stream] Error:", error);
-    // If headers already sent, we can't send error status
     if (!res.headersSent) {
-      res.status(500).json({ error: error.message });
-    } else {
-      res.end(); // close stream
+      return res.status(500).json({ error: error.message });
     }
+    return res.end();
   }
 }

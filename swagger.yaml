@@ -299,6 +299,36 @@ components:
             type: string
             format: uri
 
+    TopicContent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        roadmapId:
+          type: string
+          format: uuid
+        phaseId:
+          type: string
+          format: uuid
+        topicId:
+          type: string
+          format: uuid
+        topicTitle:
+          type: string
+        phaseNumber:
+          type: integer
+        phaseTitle:
+          type: string
+        content:
+          $ref: "#/components/schemas/TopicDetail"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
 paths:
   /:
     get:
@@ -883,7 +913,7 @@ paths:
                     type: string
 
   # ==================== Topic Endpoints ====================
-  /api/topic/stream/{phaseNumber}/{topicTitle}:
+  /api/topic/stream/{phaseId}/{topicId}:
     get:
       summary: Stream topic deep-dive (SSE)
       description: |
@@ -902,30 +932,23 @@ paths:
         - BearerAuth: []
         - CookieAuth: []
       parameters:
-        - name: phaseNumber
+        - name: phaseId
           in: path
           required: true
-          description: Phase number (1-indexed) containing the topic
+          description: Phase ID containing the topic
           schema:
-            type: integer
-            minimum: 1
-          example: 1
+            type: string
+            format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
 
-        - name: topicTitle
+        - name: topicId
           in: path
           required: true
-          description: Title of the topic (URL-encoded)
+          description: Topic ID
           schema:
             type: string
-          example: "Components"
-
-        - name: phaseTitle
-          in: query
-          required: true
-          description: Title of the phase this topic belongs to
-          schema:
-            type: string
-          example: "Fundamentals"
+            format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
 
         - name: goal
           in: query
@@ -997,325 +1020,57 @@ paths:
                   error:
                     type: string
                     example: "FastAPI stream failed: Internal Server Error"
-
-  # ==================== Topic Endpoints ====================
-  /api/topic/{phaseNumber}/{topicTitle}:
+  
+  /api/topic/{phaseId}/{topicId}:
     get:
-      summary: Get topic details
-      description: Retrieve detailed content for a specific topic including learning objectives, resources, and exercises
+      summary: Get detailed topic content
+      description: Retrieve topic details using phaseId and topicId
       tags:
         - Topic
       security:
         - BearerAuth: []
         - CookieAuth: []
       parameters:
-        - name: phaseNumber
+        - name: phaseId
           in: path
-          required: true
-          schema:
-            type: integer
-          description: Phase number in the roadmap
-          example: 1
-        - name: topicTitle
-          in: path
-          required: true
           schema:
             type: string
-          description: Title of the topic
-          example: "Components"
-        - name: phaseTitle
-          in: query
           required: true
+        - name: topicId
+          in: path
           schema:
             type: string
-          description: Title of the phase this topic belongs to
-          example: "Fundamentals"
+          required: true
         - name: goal
           in: query
-          required: true
           schema:
             type: string
-          description: Original roadmap goal
-          example: "Learn React"
-      responses:
-        "200":
-          description: Topic details retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  topicContentId:
-                    type: string
-                    format: uuid
-                    description: ID of the topic content record
-                  content:
-                    $ref: "#/components/schemas/TopicDetail"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "500":
-          description: Failed to fetch topic details
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-
-  /api/topic/stream/{phaseNumber}/{topicTitle}:
-    get:
-      summary: Stream topic details
-      description: Stream detailed topic content using Server-Sent Events (SSE)
-      tags:
-        - Topic
-      security:
-        - BearerAuth: []
-        - CookieAuth: []
-      parameters:
-        - name: phaseNumber
-          in: path
           required: true
-          schema:
-            type: integer
-          description: Phase number in the roadmap
-        - name: topicTitle
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Title of the topic
-        - name: phaseTitle
+        - name: roadmapId
           in: query
-          required: true
           schema:
             type: string
-          description: Title of the phase
-        - name: goal
-          in: query
+            format: uuid
           required: true
-          schema:
-            type: string
-          description: Original roadmap goal
       responses:
         "200":
-          description: Topic content stream
-          content:
-            text/event-stream:
-              schema:
-                type: string
-                description: Server-Sent Events stream with topic data
-        "401":
-          description: Unauthorized
-        "500":
-          description: Failed to stream topic details
-
-  # ==================== User Endpoints ====================
-  /api/user/editUser:
-    put:
-      summary: Edit user profile
-      description: Update user profile information (name, email, etc.)
-      tags:
-        - User
-      security:
-        - BearerAuth: []
-        - CookieAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                  example: "John Doe"
-                email:
-                  type: string
-                  format: email
-                  example: "john.doe@example.com"
-                image:
-                  type: string
-                  nullable: true
-                  example: "https://example.com/avatar.jpg"
-      responses:
-        "200":
-          description: User updated successfully
+          description: Topic details fetched successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "User updated successfully"
-                  user:
-                    $ref: "#/components/schemas/User"
-        "401":
-          description: Unauthorized
+                $ref: "#/components/schemas/TopicDetail"
+        "400":
+          description: Invalid request parameters or user not authenticated
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "500":
-          description: Failed to update user
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-
-  /api/user/deleteUser:
-    delete:
-      summary: Delete user account
-      description: Permanently delete the authenticated user's account and all associated data
-      tags:
-        - User
-      security:
-        - BearerAuth: []
-        - CookieAuth: []
-      responses:
-        "200":
-          description: User deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "User account deleted successfully"
-        "401":
-          description: Unauthorized
+          description: "FastAPI stream failed: Internal Server Error"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        "500":
-          description: Failed to delete user
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-
-  # ==================== Admin Endpoints ====================
-  /auth/overViewSummary:
-    get:
-      summary: Get system overview (Admin only)
-      description: Retrieve system-wide statistics and overview information. Requires admin privileges.
-      tags:
-        - Custom Auth
-      security:
-        - BearerAuth: []
-        - CookieAuth: []
-      responses:
-        "200":
-          description: System overview retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  data:
-                    type: object
-                    properties:
-                      totalUsers:
-                        type: integer
-                        example: 1250
-                      totalRoadmaps:
-                        type: integer
-                        example: 3420
-                      totalChatSessions:
-                        type: integer
-                        example: 5680
-                      activeUsers:
-                        type: integer
-                        example: 342
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "403":
-          description: Forbidden - Admin access required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "500":
-          description: Failed to fetch overview
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-
-  /auth/users:
-    get:
-      summary: Get all users (Admin only)
-      description: Retrieve a list of all users in the system. Requires admin privileges.
-      tags:
-        - Custom Auth
-      security:
-        - BearerAuth: []
-        - CookieAuth: []
-      responses:
-        "200":
-          description: Users list retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/User"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "403":
-          description: Forbidden - Admin access required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "500":
-          description: Failed to fetch users
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
 
   # ==================== Chat Endpoints ====================
   /api/chats:

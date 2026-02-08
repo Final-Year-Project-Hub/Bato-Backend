@@ -9,6 +9,8 @@
  * 3. C-style comments (// and / * ... * /)
  * 4. Trailing commas (via regex strategy)
  */
+import { randomUUID } from "crypto";
+
 export function baseParseJSON(content: string): any {
   if (!content) throw new Error("Empty input");
 
@@ -181,6 +183,31 @@ export function parseAndValidateTopicDetail(
     return null;
   }
 }
+
+export function ensureRoadmapIds(roadmapData: any) {
+  if (!roadmapData?.phases || !Array.isArray(roadmapData.phases)) return roadmapData;
+
+  roadmapData.phases = roadmapData.phases.map((phase: any, pIndex: number) => {
+    const phaseId = phase.id || randomUUID();
+
+    const topics = Array.isArray(phase.topics) ? phase.topics : [];
+    const topicsWithIds = topics.map((topic: any, tIndex: number) => ({
+      ...topic,
+      id: topic.id || randomUUID(),
+      order: topic.order ?? tIndex + 1,
+    }));
+
+    return {
+      ...phase,
+      id: phaseId,
+      phase_number: phase.phase_number ?? pIndex + 1,
+      topics: topicsWithIds,
+    };
+  });
+
+  return roadmapData;
+}
+
 
 // Deprecated alias for backward compatibility (can remove if verified unused)
 export const robustJsonParse = baseParseJSON;
