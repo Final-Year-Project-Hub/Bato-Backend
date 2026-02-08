@@ -128,7 +128,7 @@ model TopicContent {
   quizAttempts QuizAttempt[]
   
   // Ensure one topic content per roadmap/phase/topic combination
-  @@unique([roadmapId, phaseId, topicId])
+  @@unique([roadmapId, phaseId, topicId], name: "roadmapId_phaseId_topicId")
   @@index([roadmapId])
   @@index([roadmapId, phaseId])
 }
