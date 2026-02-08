@@ -925,30 +925,23 @@ paths:
         - BearerAuth: []
         - CookieAuth: []
       parameters:
-        - name: phaseNumber
+        - name: phaseId
           in: path
           required: true
-          description: Phase number (1-indexed) containing the topic
+          description: Phase ID containing the topic
           schema:
-            type: integer
-            minimum: 1
-          example: 1
+            type: string
+            format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
 
-        - name: topicTitle
+        - name: topicId
           in: path
           required: true
-          description: Title of the topic (URL-encoded)
+          description: Topic ID
           schema:
             type: string
-          example: "Components"
-
-        - name: phaseTitle
-          in: query
-          required: true
-          description: Title of the phase this topic belongs to
-          schema:
-            type: string
-          example: "Fundamentals"
+            format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
 
         - name: goal
           in: query
