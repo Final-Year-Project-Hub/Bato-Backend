@@ -45,11 +45,11 @@ export async function getTopicDetail(req: Request, res: Response) {
     let phaseNumber = 0;
     let topicTitle = "Unknown Topic";
     let phaseTitle = "Unknown Phase";
-    
+
     if (roadmap?.roadmapData) {
       const roadmapData = roadmap.roadmapData as any;
       const phases = roadmapData.phases || [];
-      
+
       // Find the phase and topic by their IDs
       const phase = phases.find((p: any) => p.id === phaseId);
       if (phase) {
@@ -60,12 +60,14 @@ export async function getTopicDetail(req: Request, res: Response) {
           topicTitle = topic.title || "Unknown Topic";
         }
       }
-    } 
+    }
 
     console.log(
-          `[Topic] Fetching detail for: ${topicTitle} (Phase ${phaseNumber})`,
-        );
-    console.log(`[Topic] Fetching detail for topicId=${topicId}, phaseId=${phaseId}`);
+      `[Topic] Fetching detail for: ${topicTitle} (Phase ${phaseNumber})`,
+    );
+    console.log(
+      `[Topic] Fetching detail for topicId=${topicId}, phaseId=${phaseId}`,
+    );
 
     // ✅ 1) Cache lookup by IDs
     let cachedContent = null;
@@ -81,11 +83,10 @@ export async function getTopicDetail(req: Request, res: Response) {
       });
     }
 
-      if (cachedContent) {
-        console.log(`[Topic] ✅ Returning cached content from database`);
-        return res.json(cachedContent.content);
-      }
-    
+    if (cachedContent) {
+      console.log(`[Topic] ✅ Returning cached content from database`);
+      return res.json(cachedContent.content);
+    }
 
     console.log(`[Topic] Fetching from FastAPI (not cached)`);
 
@@ -162,7 +163,6 @@ export async function getTopicDetail(req: Request, res: Response) {
   }
 }
 
-
 /**
  * Stream detailed topic content (Server-Sent Events)
  * @route GET /api/topic/stream/:phaseNumber/:topicTitle
@@ -180,7 +180,9 @@ export async function getTopicStream(req: Request, res: Response) {
     const { phaseId, topicId } = TopicDetailParamsSchema.parse(req.params);
     const { goal, roadmapId } = TopicDetailQuerySchema.parse(req.query);
 
-    console.log(`[Topic Stream] Starting stream for topicId=${topicId}, phaseId=${phaseId}`);
+    console.log(
+      `[Topic Stream] Starting stream for topicId=${topicId}, phaseId=${phaseId}`,
+    );
 
     // ✅ SSE headers
     res.setHeader("Content-Type", "text/event-stream");
@@ -201,15 +203,14 @@ export async function getTopicStream(req: Request, res: Response) {
       });
     }
 
-      if (cachedContent) {
-        console.log(`[Topic Stream] ✅ Returning cached content immediately`);
-        // Send as a single SSE event
-        res.setHeader("Content-Type", "text/event-stream");
-        res.setHeader("Cache-Control", "no-cache");
-        res.setHeader("Connection", "keep-alive");
-        res.write(`data: ${JSON.stringify(cachedContent.content)}\n\n`);
-        return res.end();
-      }
+    if (cachedContent) {
+      console.log(`[Topic Stream] ✅ Returning cached content immediately`);
+      // Send as a single SSE event
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.write(`data: ${JSON.stringify(cachedContent.content)}\n\n`);
+      return res.end();
     }
 
     console.log(`[Topic Stream] Streaming from FastAPI (not cached)`);
@@ -223,11 +224,11 @@ export async function getTopicStream(req: Request, res: Response) {
     let phaseNumber = 0;
     let topicTitle = "Unknown Topic";
     let phaseTitle = "Unknown Phase";
-    
+
     if (roadmap?.roadmapData) {
       const roadmapData = roadmap.roadmapData as any;
       const phases = roadmapData.phases || [];
-      
+
       const phase = phases.find((p: any) => p.id === phaseId);
       if (phase) {
         phaseNumber = phase.phase_number || 0;
@@ -274,11 +275,14 @@ export async function getTopicStream(req: Request, res: Response) {
 
     // ✅ 3) Parse and cache after stream ends
     try {
-      const { parseAndValidateTopicDetail } = await import("../utils/json-parser");
+      const { parseAndValidateTopicDetail } =
+        await import("../utils/json-parser");
       const parsed = parseAndValidateTopicDetail(fullResponse);
 
       if (!parsed) {
-        console.warn(`[Topic Stream] ⚠️ Parsed JSON but schema validation failed — not caching`);
+        console.warn(
+          `[Topic Stream] ⚠️ Parsed JSON but schema validation failed — not caching`,
+        );
         return;
       }
 
@@ -321,10 +325,11 @@ export async function getTopicStream(req: Request, res: Response) {
         });
         console.log(`[Topic Stream] 💾 Cached complete streamed content`);
       }
-
-
     } catch (cacheError) {
-      console.warn(`[Topic Stream] ⚠️ Failed to parse/cache streamed content:`, cacheError);
+      console.warn(
+        `[Topic Stream] ⚠️ Failed to parse/cache streamed content:`,
+        cacheError,
+      );
     }
   } catch (error: any) {
     console.error("[Topic Stream] Error:", error);
