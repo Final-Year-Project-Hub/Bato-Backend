@@ -8,8 +8,11 @@ info:
     - **Custom JWT Authentication**: Email/password authentication with OTP verification
     - **Email Verification**: OTP-based email verification system
     - **AI-Powered Roadmaps**: Generate personalized learning roadmaps using RAG
+    - **Topic Deep-Dive**: Detailed learning content for each topic with streaming support
+    - **AI-Generated Quizzes**: Test understanding with automatically generated quizzes
     - **Progress Tracking**: Track learning progress across roadmaps
     - **Chat System**: Interactive chat sessions for learning assistance
+    - **User Management**: Profile editing and account management
 
     ## Authentication
     Most endpoints require authentication via JWT tokens (Bearer or Cookie-based).
@@ -32,6 +35,10 @@ tags:
     description: AI-powered learning roadmap generation and management
   - name: Topic
     description: Topic deep-dive for detailed learning content
+  - name: Quiz
+    description: AI-generated quizzes for testing understanding
+  - name: User
+    description: User profile management and account operations
   - name: Chat
     description: Chat session management for learning assistance
   - name: Progress
@@ -990,6 +997,326 @@ paths:
                   error:
                     type: string
                     example: "FastAPI stream failed: Internal Server Error"
+
+  # ==================== Topic Endpoints ====================
+  /api/topic/{phaseNumber}/{topicTitle}:
+    get:
+      summary: Get topic details
+      description: Retrieve detailed content for a specific topic including learning objectives, resources, and exercises
+      tags:
+        - Topic
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: phaseNumber
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Phase number in the roadmap
+          example: 1
+        - name: topicTitle
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Title of the topic
+          example: "Components"
+        - name: phaseTitle
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Title of the phase this topic belongs to
+          example: "Fundamentals"
+        - name: goal
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Original roadmap goal
+          example: "Learn React"
+      responses:
+        "200":
+          description: Topic details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  topicContentId:
+                    type: string
+                    format: uuid
+                    description: ID of the topic content record
+                  content:
+                    $ref: "#/components/schemas/TopicDetail"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Failed to fetch topic details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+  /api/topic/stream/{phaseNumber}/{topicTitle}:
+    get:
+      summary: Stream topic details
+      description: Stream detailed topic content using Server-Sent Events (SSE)
+      tags:
+        - Topic
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: phaseNumber
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Phase number in the roadmap
+        - name: topicTitle
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Title of the topic
+        - name: phaseTitle
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Title of the phase
+        - name: goal
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Original roadmap goal
+      responses:
+        "200":
+          description: Topic content stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-Sent Events stream with topic data
+        "401":
+          description: Unauthorized
+        "500":
+          description: Failed to stream topic details
+
+  # ==================== User Endpoints ====================
+  /api/user/editUser:
+    put:
+      summary: Edit user profile
+      description: Update user profile information (name, email, etc.)
+      tags:
+        - User
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: "John Doe"
+                email:
+                  type: string
+                  format: email
+                  example: "john.doe@example.com"
+                image:
+                  type: string
+                  nullable: true
+                  example: "https://example.com/avatar.jpg"
+      responses:
+        "200":
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "User updated successfully"
+                  user:
+                    $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Failed to update user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+  /api/user/deleteUser:
+    delete:
+      summary: Delete user account
+      description: Permanently delete the authenticated user's account and all associated data
+      tags:
+        - User
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        "200":
+          description: User deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "User account deleted successfully"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Failed to delete user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+  # ==================== Admin Endpoints ====================
+  /auth/overViewSummary:
+    get:
+      summary: Get system overview (Admin only)
+      description: Retrieve system-wide statistics and overview information. Requires admin privileges.
+      tags:
+        - Custom Auth
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        "200":
+          description: System overview retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      totalUsers:
+                        type: integer
+                        example: 1250
+                      totalRoadmaps:
+                        type: integer
+                        example: 3420
+                      totalChatSessions:
+                        type: integer
+                        example: 5680
+                      activeUsers:
+                        type: integer
+                        example: 342
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Failed to fetch overview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+  /auth/users:
+    get:
+      summary: Get all users (Admin only)
+      description: Retrieve a list of all users in the system. Requires admin privileges.
+      tags:
+        - Custom Auth
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        "200":
+          description: Users list retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Failed to fetch users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
   # ==================== Chat Endpoints ====================
   /api/chats:
     post:
@@ -1572,3 +1899,295 @@ paths:
                     type: boolean
                   data:
                     $ref: "#/components/schemas/Progress"
+
+  # ==================== Quiz Endpoints ====================
+  /api/quiz/generate/{topicContentId}:
+    post:
+      summary: Generate quiz for topic
+      description: Generate an AI-powered quiz for a specific topic. Returns cached quiz if already generated.
+      tags:
+        - Quiz
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: topicContentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the topic content to generate quiz for
+      responses:
+        "200":
+          description: Quiz generated successfully or returned from cache
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  questions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 1
+                        question:
+                          type: string
+                          example: "What is React?"
+                        options:
+                          type: object
+                          properties:
+                            A:
+                              type: string
+                            B:
+                              type: string
+                            C:
+                              type: string
+                            D:
+                              type: string
+                        correctAnswer:
+                          type: string
+                          pattern: "^[A-D]$"
+                          example: "A"
+                        explanation:
+                          type: string
+                          example: "React is a JavaScript library for building user interfaces."
+                        difficulty:
+                          type: string
+                          enum: [easy, medium, hard]
+                          example: "medium"
+                        concept:
+                          type: string
+                          example: "React Basics"
+                  metadata:
+                    type: object
+                    properties:
+                      totalQuestions:
+                        type: integer
+                        example: 5
+                      estimatedTime:
+                        type: string
+                        example: "8-10 minutes"
+                      passingScore:
+                        type: integer
+                        example: 70
+        "404":
+          description: Topic content not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Topic content not found"
+        "500":
+          description: Quiz generation failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+  /api/quiz/submit:
+    post:
+      summary: Submit quiz attempt
+      description: Submit user's quiz answers and receive score with detailed feedback
+      tags:
+        - Quiz
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - topicContentId
+                - answers
+              properties:
+                topicContentId:
+                  type: string
+                  format: uuid
+                  description: ID of the topic content
+                answers:
+                  type: object
+                  additionalProperties:
+                    type: string
+                    pattern: "^[A-D]$"
+                  example:
+                    "1": "A"
+                    "2": "B"
+                    "3": "C"
+                    "4": "D"
+                    "5": "A"
+                timeSpent:
+                  type: integer
+                  description: Time spent on quiz in seconds
+                  example: 420
+      responses:
+        "200":
+          description: Quiz submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attemptId:
+                    type: string
+                    format: uuid
+                  score:
+                    type: number
+                    format: float
+                    example: 80.0
+                  correctAnswers:
+                    type: integer
+                    example: 4
+                  totalQuestions:
+                    type: integer
+                    example: 5
+                  passed:
+                    type: boolean
+                    example: true
+                  feedback:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        questionId:
+                          type: integer
+                        question:
+                          type: string
+                        userAnswer:
+                          type: string
+                        correctAnswer:
+                          type: string
+                        isCorrect:
+                          type: boolean
+                        explanation:
+                          type: string
+        "401":
+          description: Unauthorized
+        "404":
+          description: Topic content or quiz not found
+        "500":
+          description: Submission failed
+
+  /api/quiz/history/{topicContentId}:
+    get:
+      summary: Get quiz history
+      description: Retrieve all quiz attempts for a specific topic by the authenticated user
+      tags:
+        - Quiz
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: topicContentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the topic content
+      responses:
+        "200":
+          description: Quiz history retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    userId:
+                      type: string
+                      format: uuid
+                    topicContentId:
+                      type: string
+                      format: uuid
+                    answers:
+                      type: object
+                    score:
+                      type: number
+                      format: float
+                    totalQuestions:
+                      type: integer
+                    correctAnswers:
+                      type: integer
+                    timeSpent:
+                      type: integer
+                      nullable: true
+                    completedAt:
+                      type: string
+                      format: date-time
+        "401":
+          description: Unauthorized
+        "500":
+          description: Failed to fetch history
+
+  /api/quiz/best/{topicContentId}:
+    get:
+      summary: Get best quiz attempt
+      description: Retrieve the highest-scoring quiz attempt for a specific topic by the authenticated user
+      tags:
+        - Quiz
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: topicContentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the topic content
+      responses:
+        "200":
+          description: Best attempt retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  userId:
+                    type: string
+                    format: uuid
+                  topicContentId:
+                    type: string
+                    format: uuid
+                  answers:
+                    type: object
+                  score:
+                    type: number
+                    format: float
+                  totalQuestions:
+                    type: integer
+                  correctAnswers:
+                    type: integer
+                  timeSpent:
+                    type: integer
+                    nullable: true
+                  completedAt:
+                    type: string
+                    format: date-time
+        "401":
+          description: Unauthorized
+        "404":
+          description: No attempts found
+        "500":
+          description: Failed to fetch best attempt

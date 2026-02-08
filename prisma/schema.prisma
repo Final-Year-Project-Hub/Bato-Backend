@@ -23,7 +23,9 @@ model User {
   knownTech     UserKnownTechnology[]
   preferences   UserPreferences?
   otps          Otp[]
-  document      Document[]
+  document        Document[]
+  quizAttempts    QuizAttempt[]
+  documentSources DocumentSource[]
 
   @@index([role])
   @@index([email])
@@ -110,12 +112,16 @@ model TopicContent {
   // Generated content (stored as JSON)
   content     Json
   
+  // Quiz data (AI-generated questions)
+  quiz        Json?
+  
   // Metadata
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
   // Relations
-  roadmap     Roadmap  @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  roadmap      Roadmap       @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  quizAttempts QuizAttempt[]
   
   // Ensure one topic content per roadmap/phase/topic combination
   @@unique([roadmapId, phaseNumber, topicTitle])
@@ -195,6 +201,83 @@ model Ingest {
 
   @@index([documentId])
   @@index([status])
+}
+
+model QuizAttempt {
+  id              String       @id @default(uuid())
+  userId          String
+  topicContentId  String
+  
+  // Quiz data
+  answers         Json         // User's answers { questionId: selectedOption }
+  score           Float        // Percentage score (0-100)
+  totalQuestions  Int
+  correctAnswers  Int
+  
+  // Metadata
+  timeSpent       Int?         // Time spent in seconds
+  completedAt     DateTime     @default(now())
+  
+  // Relations
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicContent    TopicContent @relation(fields: [topicContentId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([topicContentId])
+  @@index([userId, topicContentId])
+}
+
+model DocumentSource {
+  id              String          @id @default(uuid())
+  
+  // Framework Info (Required)
+  frameworkKey    String          @unique
+  frameworkName   String
+  version         String
+  baseUrl         String
+  
+  // File Handling (Required)
+  extensions      String[]
+  subdirectory    String?
+  
+  // Preprocessing (Optional)
+  removePatterns  String[]        @default([])
+  cleanWhitespace Boolean         @default(true)
+  
+  // URL Configuration (Optional)
+  pathPrefix      String?
+  stripNumPrefix  Boolean         @default(false)
+  replaceExts     Json?
+  
+  // Storage Info
+  storageKey      String?
+  docsPath        String
+  collectionName  String          @default("framework_docs")
+  fileCount       Int?
+  totalSize       Int?
+  
+  // Ingestion Status
+  status          IngestionStatus @default(QUEUED)
+  chunksIndexed   Int?
+  lastIngestedAt  DateTime?
+  errorMessage    String?
+  
+  // Ingestion Parameters (Optional - use defaults if not set)
+  targetTokens    Int             @default(500)
+  maxTokens       Int             @default(2000)
+  recreateCollection Boolean      @default(false)
+  
+  // Metadata
+  uploadedBy      String
+  uploadedAt      DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relations
+  uploader        User            @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+  
+  @@index([frameworkKey])
+  @@index([status])
+  @@index([uploadedBy])
 }
 
 enum Role {

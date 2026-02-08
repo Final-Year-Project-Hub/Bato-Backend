@@ -55,7 +55,10 @@ export async function getTopicDetail(req: Request, res: Response) {
 
       if (cachedContent) {
         console.log(`[Topic] ✅ Returning cached content from database`);
-        return res.json(cachedContent.content);
+        return res.json({
+          ...(cachedContent.content as Record<string, any>),
+          topicContentId: cachedContent.id, // Add topicContentId for quiz feature
+        });
       }
     }
 
@@ -92,9 +95,10 @@ export async function getTopicDetail(req: Request, res: Response) {
     const topicDetail = await response.json();
 
     // Cache the content in database if roadmapId is provided
+    let topicContentId: string | undefined;
     if (roadmapId) {
       try {
-        await prisma.topicContent.create({
+        const createdContent = await prisma.topicContent.create({
           data: {
             roadmapId,
             topicTitle,
@@ -103,7 +107,10 @@ export async function getTopicDetail(req: Request, res: Response) {
             content: topicDetail,
           },
         });
-        console.log(`[Topic] 💾 Cached content in database`);
+        topicContentId = createdContent.id;
+        console.log(
+          `[Topic] 💾 Cached content in database with ID: ${topicContentId}`,
+        );
       } catch (cacheError) {
         // If caching fails (e.g., duplicate), just log and continue
         console.warn(`[Topic] ⚠️ Failed to cache content:`, cacheError);
@@ -112,7 +119,10 @@ export async function getTopicDetail(req: Request, res: Response) {
 
     console.log(`[Topic] ✅ Successfully fetched topic detail`);
 
-    res.json(topicDetail);
+    res.json({
+      ...topicDetail,
+      topicContentId, // Add topicContentId if available
+    });
   } catch (error: any) {
     console.error("[Topic] Error fetching topic detail:", error);
 
@@ -169,11 +179,15 @@ export async function getTopicStream(req: Request, res: Response) {
 
       if (cachedContent) {
         console.log(`[Topic Stream] ✅ Returning cached content immediately`);
-        // Send as a single SSE event
+        // Send as a single SSE event with topicContentId
         res.setHeader("Content-Type", "text/event-stream");
         res.setHeader("Cache-Control", "no-cache");
         res.setHeader("Connection", "keep-alive");
-        res.write(`data: ${JSON.stringify(cachedContent.content)}\n\n`);
+        const contentWithId = {
+          ...(cachedContent.content as Record<string, any>),
+          topicContentId: cachedContent.id,
+        };
+        res.write(`data: ${JSON.stringify(contentWithId)}\n\n`);
         return res.end();
       }
     }
@@ -267,7 +281,7 @@ export async function getTopicStream(req: Request, res: Response) {
             topicTitle,
             phaseNumber,
             phaseTitle,
-            content: jsonContent as any,
+            content: jsonContent as Record<string, any>,
           },
         });
         console.log(`[Topic Stream] 💾 Cached complete content in database`);
