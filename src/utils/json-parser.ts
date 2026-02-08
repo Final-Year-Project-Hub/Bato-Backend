@@ -48,8 +48,9 @@ export function baseParseJSON(content: string): any {
     // A: Clean Parse
     () => JSON.parse(jsonStr),
 
-    // B: Remove Trailing Commas
+    // B: Remove Trailing Commas (Enhanced)
     () => {
+      // Remove trailing commas before } or ]
       const noTrailing = jsonStr
         .replace(/,(\s*[}\]])/g, "$1")
         .replace(/,(\s*)$/g, "$1");
@@ -62,10 +63,20 @@ export function baseParseJSON(content: string): any {
       return JSON.parse(fixed);
     },
 
-    // D: Repair Incomplete JSON Structure
+    // D: Repair Incomplete JSON Structure (with trailing comma fix)
     () => {
-      const repaired = repairIncompleteJSON(jsonStr);
+      let repaired = repairIncompleteJSON(jsonStr);
+      // Double check for trailing commas after repair
+      repaired = repaired.replace(/,(\s*[}\]])/g, "$1");
       return JSON.parse(repaired);
+    },
+
+    // E: Aggressive Cleanup (for "Expected property name" error)
+    () => {
+      // Remove any non-alphanumeric char (except quotes) before a closing brace
+      // This handles cases like { "key": "value" , } or { "key": "value" . }
+      const aggressive = jsonStr.replace(/[^"0-9a-zA-Z\s]+(\s*[}])/g, "$1");
+      return JSON.parse(aggressive);
     },
   ];
 
@@ -217,6 +228,9 @@ function repairIncompleteJSON(str: string): string {
   let inString = false;
   let escaped = false;
 
+  // Track specific opening characters to ensure correct closing order
+  const stack: string[] = [];
+
   for (let i = 0; i < str.length; i++) {
     const char = str[i];
 
@@ -230,10 +244,22 @@ function repairIncompleteJSON(str: string): string {
     }
 
     if (!inString) {
-      if (char === "{") openBraces++;
-      if (char === "}") openBraces--;
-      if (char === "[") openBrackets++;
-      if (char === "]") openBrackets--;
+      if (char === "{") {
+        openBraces++;
+        stack.push("}");
+      }
+      if (char === "}") {
+        openBraces--;
+        if (stack.length > 0 && stack[stack.length - 1] === "}") stack.pop();
+      }
+      if (char === "[") {
+        openBrackets++;
+        stack.push("]");
+      }
+      if (char === "]") {
+        openBrackets--;
+        if (stack.length > 0 && stack[stack.length - 1] === "]") stack.pop();
+      }
     }
 
     escaped = false;
@@ -244,14 +270,17 @@ function repairIncompleteJSON(str: string): string {
     str += '"';
   }
 
-  // Close unclosed brackets and braces
-  while (openBrackets > 0) {
-    str += "]";
-    openBrackets--;
+  // Handle hanging comma or colon
+  const trimmed = str.trimEnd();
+  if (trimmed.endsWith(",")) {
+    str = trimmed.slice(0, -1);
+  } else if (trimmed.endsWith(":")) {
+    str = trimmed + "null";
   }
-  while (openBraces > 0) {
-    str += "}";
-    openBraces--;
+
+  // Close unclosed brackets and braces in reverse order of opening
+  while (stack.length > 0) {
+    str += stack.pop();
   }
 
   return str;
