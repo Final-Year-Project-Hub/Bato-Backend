@@ -32,8 +32,10 @@ export function baseParseJSON(content: string): any {
   // 3. Strip Comments (Crucial for "jsx" or commented lines)
   jsonStr = stripComments(jsonStr);
 
-  // 4. Handle Double Braces (Common LLM Hallucination)
-  // Logic: If it starts with "{{", replace with "{". Same for end "}}".
+  // 4. Sanitize Control Characters (Fix streaming issues)
+  jsonStr = sanitizeControlCharacters(jsonStr);
+
+  // 5. Handle Double Braces (Common LLM Hallucination)
   if (jsonStr.startsWith("{{")) {
     jsonStr = jsonStr.replace("{{", "{");
   }
@@ -41,17 +43,29 @@ export function baseParseJSON(content: string): any {
     jsonStr = jsonStr.substring(0, jsonStr.length - 2) + "}";
   }
 
-  // 4. Attempt Parsing with Strategies
+  // 6. Attempt Parsing with Strategies
   const strategies = [
     // A: Clean Parse
     () => JSON.parse(jsonStr),
 
-    // B: Remove Trailing Commas (Common LLM error)
+    // B: Remove Trailing Commas
     () => {
       const noTrailing = jsonStr
         .replace(/,(\s*[}\]])/g, "$1")
         .replace(/,(\s*)$/g, "$1");
       return JSON.parse(noTrailing);
+    },
+
+    // C: Fix Unterminated Strings (streaming cutoff)
+    () => {
+      const fixed = fixUnterminatedStrings(jsonStr);
+      return JSON.parse(fixed);
+    },
+
+    // D: Repair Incomplete JSON Structure
+    () => {
+      const repaired = repairIncompleteJSON(jsonStr);
+      return JSON.parse(repaired);
     },
   ];
 
@@ -109,6 +123,138 @@ function stripComments(str: string): string {
     i++;
   }
   return result;
+}
+
+/**
+ * Sanitize control characters in JSON strings
+ * Escapes unescaped newlines, tabs, and other control characters
+ */
+function sanitizeControlCharacters(str: string): string {
+  let result = "";
+  let inString = false;
+  let i = 0;
+
+  while (i < str.length) {
+    const char = str[i];
+    const prevChar = i > 0 ? str[i - 1] : "";
+
+    // Track if we're inside a string
+    if (char === '"' && prevChar !== "\\") {
+      inString = !inString;
+      result += char;
+      i++;
+      continue;
+    }
+
+    // If inside a string, escape control characters
+    if (inString) {
+      if (char === "\n" && prevChar !== "\\") {
+        result += "\\n";
+      } else if (char === "\r" && prevChar !== "\\") {
+        result += "\\r";
+      } else if (char === "\t" && prevChar !== "\\") {
+        result += "\\t";
+      } else if (char.charCodeAt(0) < 32 && prevChar !== "\\") {
+        // Other control characters
+        result += "\\u" + char.charCodeAt(0).toString(16).padStart(4, "0");
+      } else {
+        result += char;
+      }
+    } else {
+      result += char;
+    }
+    i++;
+  }
+
+  return result;
+}
+
+/**
+ * Fix unterminated strings by closing them properly
+ */
+function fixUnterminatedStrings(str: string): string {
+  // Count quotes to see if we have an unterminated string
+  let quoteCount = 0;
+  let escaped = false;
+
+  for (let i = 0; i < str.length; i++) {
+    if (str[i] === "\\" && !escaped) {
+      escaped = true;
+      continue;
+    }
+    if (str[i] === '"' && !escaped) {
+      quoteCount++;
+    }
+    escaped = false;
+  }
+
+  // If odd number of quotes, we have an unterminated string
+  if (quoteCount % 2 !== 0) {
+    // Find the last quote and close the string
+    const lastQuote = str.lastIndexOf('"');
+    if (lastQuote !== -1) {
+      // Add closing quote before any trailing braces
+      let insertPos = str.length;
+      // Find where to insert the closing quote (before } or ])
+      for (let i = str.length - 1; i > lastQuote; i--) {
+        if (str[i] === "}" || str[i] === "]") {
+          insertPos = i;
+        }
+      }
+      str = str.substring(0, insertPos) + '"' + str.substring(insertPos);
+    }
+  }
+
+  return str;
+}
+
+/**
+ * Repair incomplete JSON by closing unclosed braces/brackets
+ */
+function repairIncompleteJSON(str: string): string {
+  let openBraces = 0;
+  let openBrackets = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+
+    if (char === "\\" && !escaped) {
+      escaped = true;
+      continue;
+    }
+
+    if (char === '"' && !escaped) {
+      inString = !inString;
+    }
+
+    if (!inString) {
+      if (char === "{") openBraces++;
+      if (char === "}") openBraces--;
+      if (char === "[") openBrackets++;
+      if (char === "]") openBrackets--;
+    }
+
+    escaped = false;
+  }
+
+  // Close any unclosed strings first
+  if (inString) {
+    str += '"';
+  }
+
+  // Close unclosed brackets and braces
+  while (openBrackets > 0) {
+    str += "]";
+    openBrackets--;
+  }
+  while (openBraces > 0) {
+    str += "}";
+    openBraces--;
+  }
+
+  return str;
 }
 
 // ============================================================================
@@ -185,7 +331,8 @@ export function parseAndValidateTopicDetail(
 }
 
 export function ensureRoadmapIds(roadmapData: any) {
-  if (!roadmapData?.phases || !Array.isArray(roadmapData.phases)) return roadmapData;
+  if (!roadmapData?.phases || !Array.isArray(roadmapData.phases))
+    return roadmapData;
 
   roadmapData.phases = roadmapData.phases.map((phase: any, pIndex: number) => {
     const phaseId = phase.id || randomUUID();
@@ -207,7 +354,6 @@ export function ensureRoadmapIds(roadmapData: any) {
 
   return roadmapData;
 }
-
 
 // Deprecated alias for backward compatibility (can remove if verified unused)
 export const robustJsonParse = baseParseJSON;
