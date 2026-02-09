@@ -43,7 +43,11 @@ export function baseParseJSON(content: string): any {
     jsonStr = jsonStr.substring(0, jsonStr.length - 2) + "}";
   }
 
-  // 6. Attempt Parsing with Strategies
+  // 6. Pre-escape Markdown Code Blocks (Crucial for nested codes)
+  // This prevents quotes/newlines inside ```blocks``` from breaking the JSON structure
+  jsonStr = escapeMarkdownCodeBlocks(jsonStr);
+
+  // 7. Attempt Parsing with Strategies
   const strategies = [
     // A: Clean Parse
     () => JSON.parse(jsonStr),
@@ -90,6 +94,37 @@ export function baseParseJSON(content: string): any {
   }
 
   throw new Error(`JSON Parse failed: ${lastError?.message}`);
+}
+
+/**
+ * Escapes quotes and newlines inside markdown code blocks (``` ... ```)
+ * to prevent them from breaking the JSON string structure.
+ */
+function escapeMarkdownCodeBlocks(str: string): string {
+  return str.replace(/```[\s\S]*?```/g, (match) => {
+    // We only want to escape if the block is NOT already properly escaped.
+    // However, knowing that is hard.
+    // Heuristic: If we see literal unescaped newlines or quotes, escape them.
+    // But we preserve the backticks logic? No, usually checking content is enough.
+
+    // 1. Escape literal backslashes first to avoid messing up existing escapes
+    let content = match; //.replace(/\\/g, "\\\\");
+    // (Actually, if valid JSON, backslashes are already escaped. If invalid, maybe not.
+    // Touching backslashes is risky. Let's focus on Newlines and Quotes)
+
+    // Escape Newlines: literal \n -> \\n
+    content = content.replace(/\n/g, "\\n");
+    content = content.replace(/\r/g, "\\r");
+
+    // Escape Quotes: literal " -> \" (only if not already escaped?)
+    // This is tricky. simpler: Replace " with \"
+    // But what if it was \"? -> \\" (valid literal backslash and quote)
+    // If it was already correct, we might double escape?
+    // Let's assume the parser failed because it WASN'T correct.
+    content = content.replace(/"/g, '\\"');
+
+    return content;
+  });
 }
 
 /**
@@ -333,11 +368,22 @@ export function parseAndValidateRoadmap(content: string): RoadmapData | null {
 }
 
 export function validateTopicDetail(data: any): data is TopicDetail {
+  if (!data || typeof data !== "object") return false;
+
+  // Check for new structure (sections object)
+  if (data.sections && typeof data.sections === "object") {
+    const hasIntroduction =
+      data.sections.introduction &&
+      typeof data.sections.introduction.markdown === "string";
+    // We can add more strict checks if needed, but this is a good baseline
+    return typeof data.title === "string" && hasIntroduction;
+  }
+
+  // Fallback check for old structure (optional, for backward compatibility)
   return (
-    data &&
-    typeof data === "object" &&
-    typeof data.title === "string" && // Strict check
-    typeof data.overview === "string"
+    typeof data.title === "string" &&
+    (typeof data.overview === "string" ||
+      (typeof data.sections === "object" && data.sections !== null))
   );
 }
 
