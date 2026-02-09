@@ -100,3 +100,5 @@ app.get("/", (req, res) => {
 app.use(errorMiddleware);
 
 export default app;
+
+// Force restart to reload swagger.yaml
