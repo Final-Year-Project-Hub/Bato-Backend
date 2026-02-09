@@ -1,5 +1,13 @@
 import { Request, Response } from "express";
+import { BadRequestException, ErrorCode } from "../utils/root";
 import { progressService } from "../services/progress.service";
+import {
+  RoadmapIdParamsSchema,
+  ViewTopicSchema,
+  CompleteTopicSchema,
+  CompletePhaseQuizSchema,
+  UpdateTimeSpentSchema,
+} from "../validation/progress.validations";
 
 export class ProgressController {
   /**
@@ -7,150 +15,72 @@ export class ProgressController {
    * GET /api/v1/roadmaps/:roadmapId/progress
    */
   async getProgress(req: Request, res: Response) {
-    try {
-      const { roadmapId } = req.params;
+    const user = req.user;
+    if (!user) throw new BadRequestException("Unauthorized", ErrorCode.UNAUTHORIZED_REQUEST);
 
-      const progress = await progressService.getProgress(roadmapId);
+    const { roadmapId } = RoadmapIdParamsSchema.parse(req.params);
 
-      if (!progress) {
-        return res.status(404).json({
-          success: false,
-          error: "Progress not found for this roadmap",
-        });
-      }
+    const progress = await progressService.getProgress(roadmapId, user.id);
+    const completionPercentage = await progressService.calculateCompletionPercentage(roadmapId, user.id);
 
-      const completionPercentage =
-        await progressService.calculateCompletionPercentage(roadmapId);
-
-      res.status(200).json({
-        success: true,
-        data: {
-          ...progress,
-          completionPercentage,
-        },
-      });
-    } catch (error: any) {
-      console.error("[ProgressController] Error getting progress:", error);
-      res.status(500).json({
-        success: false,
-        error: error.message || "Failed to get progress",
-      });
-    }
+    return res.json({ progress, completionPercentage });
   }
 
-  /**
-   * Update progress for a roadmap
-   * PATCH /api/v1/roadmaps/:roadmapId/progress
-   */
-  async updateProgress(req: Request, res: Response) {
-    try {
-      const { roadmapId } = req.params;
-      const updates = req.body;
+  async viewTopic(req: Request, res: Response) {
+    const user = req.user;
+    if (!user) throw new BadRequestException("Unauthorized", ErrorCode.UNAUTHORIZED_REQUEST);
 
-      const progress = await progressService.updateProgress(roadmapId, updates);
+    const { roadmapId } = RoadmapIdParamsSchema.parse(req.params);
+    const { phaseId, topicId } = ViewTopicSchema.parse(req.body);
 
-      const completionPercentage =
-        await progressService.calculateCompletionPercentage(roadmapId);
-
-      res.status(200).json({
-        success: true,
-        data: {
-          ...progress,
-          completionPercentage,
-        },
-      });
-    } catch (error: any) {
-      console.error("[ProgressController] Error updating progress:", error);
-      res.status(500).json({
-        success: false,
-        error: error.message || "Failed to update progress",
-      });
-    }
+    const progress = await progressService.viewTopic(roadmapId, user.id, phaseId, topicId);
+    return res.json({ progress });
   }
 
-  /**
-   * Complete a phase
-   * POST /api/v1/roadmaps/:roadmapId/progress/complete-phase
-   */
-  async completePhase(req: Request, res: Response) {
-    try {
-      const { roadmapId } = req.params;
-      const { phaseIndex } = req.body;
-
-      if (phaseIndex === undefined) {
-        return res.status(400).json({ error: "phaseIndex is required" });
-      }
-
-      const progress = await progressService.completePhase(
-        roadmapId,
-        phaseIndex
-      );
-
-      res.status(200).json({
-        success: true,
-        data: progress,
-      });
-    } catch (error: any) {
-      console.error("[ProgressController] Error completing phase:", error);
-      res.status(500).json({
-        success: false,
-        error: error.message || "Failed to complete phase",
-      });
-    }
-  }
-
-  /**
-   * Complete a topic
-   * POST /api/v1/roadmaps/:roadmapId/progress/complete-topic
-   */
   async completeTopic(req: Request, res: Response) {
-    try {
-      const { roadmapId } = req.params;
-      const { topicPath } = req.body;
+    const user = req.user;
+    if (!user) throw new BadRequestException("Unauthorized", ErrorCode.UNAUTHORIZED_REQUEST);
 
-      if (!topicPath) {
-        return res.status(400).json({ error: "topicPath is required" });
-      }
+    const { roadmapId } = RoadmapIdParamsSchema.parse(req.params);
+    const { phaseId, topicId } = CompleteTopicSchema.parse(req.body);
 
-      const progress = await progressService.completeTopic(
-        roadmapId,
-        topicPath
-      );
+    const { updated, phaseAllDone } = await progressService.completeTopic(roadmapId, user.id, phaseId, topicId);
+    const completionPercentage = await progressService.calculateCompletionPercentage(roadmapId, user.id);
 
-      res.status(200).json({
-        success: true,
-        data: progress,
-      });
-    } catch (error: any) {
-      console.error("[ProgressController] Error completing topic:", error);
-      res.status(500).json({
-        success: false,
-        error: error.message || "Failed to complete topic",
-      });
-    }
+    return res.json({ progress: updated, phaseAllDone, completionPercentage });
   }
 
-  /**
-   * Reset progress for a roadmap
-   * POST /api/v1/roadmaps/:roadmapId/progress/reset
-   */
+  async completePhaseQuiz(req: Request, res: Response) {
+    const user = req.user;
+    if (!user) throw new BadRequestException("Unauthorized", ErrorCode.UNAUTHORIZED_REQUEST);
+
+    const { roadmapId } = RoadmapIdParamsSchema.parse(req.params);
+    const { phaseId, passed } = CompletePhaseQuizSchema.parse(req.body);
+
+    const { updated, phaseCompleted } = await progressService.completePhaseQuiz(roadmapId, user.id, phaseId, passed);
+
+    return res.json({ progress: updated, phaseCompleted });
+  }
+
+  async addTimeSpent(req: Request, res: Response) {
+    const user = req.user;
+    if (!user) throw new BadRequestException("Unauthorized", ErrorCode.UNAUTHORIZED_REQUEST);
+
+    const { roadmapId } = RoadmapIdParamsSchema.parse(req.params);
+    const { timeSpent } = UpdateTimeSpentSchema.parse(req.body);
+
+    const progress = await progressService.addTimeSpent(roadmapId, user.id, timeSpent);
+    return res.json({ progress });
+  }
+
   async resetProgress(req: Request, res: Response) {
-    try {
-      const { roadmapId } = req.params;
+    const user = req.user;
+    if (!user) throw new BadRequestException("Unauthorized", ErrorCode.UNAUTHORIZED_REQUEST);
 
-      const progress = await progressService.resetProgress(roadmapId);
+    const { roadmapId } = RoadmapIdParamsSchema.parse(req.params);
 
-      res.status(200).json({
-        success: true,
-        data: progress,
-      });
-    } catch (error: any) {
-      console.error("[ProgressController] Error resetting progress:", error);
-      res.status(500).json({
-        success: false,
-        error: error.message || "Failed to reset progress",
-      });
-    }
+    const progress = await progressService.reset(roadmapId, user.id);
+    return res.json({ progress });
   }
 }
 

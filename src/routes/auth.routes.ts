@@ -10,8 +10,9 @@ import {
   resetPassword,
   forgotPassword,
 } from "../controllers/auth.controller";
-import {errorHandler } from "../middlewares/error-handler";
+import { errorHandler } from "../middlewares/error-handler";
 import { verifyUser,verifyAdmin } from "../middlewares/auth.middleware";
+import { ApiResponse } from "../utils/apiResponse";
 import passport from "passport";
 import {generateAccessToken, generateRefreshToken } from "../utils/jwt";
 import { prisma } from "@/lib/prisma";
@@ -40,7 +41,7 @@ router.route("/google/callback").get(passport.authenticate("google", { failureRe
       const accessToken = generateAccessToken(user.id);
       const refreshToken = generateRefreshToken(user.id);
 
-      // ✅ Save refreshToken in DB
+      //  Save refreshToken in DB
       await prisma.user.update({
         where: { id: user.id },
         data: { refreshToken },

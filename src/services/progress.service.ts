@@ -1,200 +1,333 @@
-import { prisma } from "../lib/prisma.js";
+import { prisma } from "../lib/prisma";
+import {
+  BadRequestException,
+  ErrorCode,
+  NotFoundException,
+  InternalException,
+} from "../utils/root";
 
-interface ProgressUpdate {
-  completedPhases?: number[];
-  completedTopics?: string[];
-  currentPhase?: number;
-  currentTopic?: string;
-  timeSpent?: number;
+type RoadmapData = any;
+
+function toStringArray(json: unknown): string[] {
+  if (!Array.isArray(json)) return [];
+  return json.filter((x) => typeof x === "string") as string[];
+}
+
+function extractRoadmapIds(roadmapData: RoadmapData) {
+  const phases = Array.isArray(roadmapData?.phases) ? roadmapData.phases : [];
+
+  const phaseIds: string[] = [];
+  const phaseToTopicIds: Record<string, string[]> = {};
+  const topicIdToNext: Record<string, { nextTopicId?: string; nextPhaseId?: string }> = {};
+
+  for (let p = 0; p < phases.length; p++) {
+    const phase = phases[p];
+    const phaseId = phase?.id;
+    if (typeof phaseId !== "string") continue;
+
+    phaseIds.push(phaseId);
+
+    const topics = Array.isArray(phase?.topics) ? phase.topics : [];
+    const topicIds = topics
+      .map((t: any) => t?.id)
+      .filter((id: any) => typeof id === "string") as string[];
+
+    phaseToTopicIds[phaseId] = topicIds;
+
+   for (let t = 0; t < topicIds.length; t++) {
+  const current = topicIds[t];
+  const nextTopicId = topicIds[t + 1];
+
+  // ✅ Only for the LAST topic of the phase,
+  // set nextPhaseId to the next phase’s id.
+  const nextPhaseId =
+    t === topicIds.length - 1
+      ? (phases[p + 1]?.id as string | undefined)
+      : undefined;
+
+  topicIdToNext[current] = { nextTopicId, nextPhaseId };
+}
+  }
+
+  return { phaseIds, phaseToTopicIds, topicIdToNext };
 }
 
 export class ProgressService {
-  /**
-   * Initialize progress tracking for a new roadmap
-   */
-  async initializeProgress(roadmapId: string): Promise<any> {
+  private async getUserRoadmapOrThrow(roadmapId: string, userId: string) {
+    const roadmap = await prisma.roadmap.findFirst({
+      where: { id: roadmapId, userId },
+      select: { id: true, roadmapData: true },
+    });
+
+    if (!roadmap) {
+      throw new NotFoundException("Roadmap not found", ErrorCode.NOT_FOUND);
+    }
+
+    return roadmap;
+  }
+
+  async initializeProgress(roadmapId: string, userId: string) {
+    const roadmap = await this.getUserRoadmapOrThrow(roadmapId, userId);
+    const roadmapData = roadmap.roadmapData as any;
+
+    const { phaseIds, phaseToTopicIds } = extractRoadmapIds(roadmapData);
+
+    const firstPhaseId = phaseIds[0] ?? null;
+    const firstTopicId =
+      firstPhaseId ? (phaseToTopicIds[firstPhaseId]?.[0] ?? null) : null;
+
     const existing = await prisma.roadmapProgress.findUnique({
       where: { roadmapId },
     });
 
-    if (existing) {
-      return existing;
+    if (existing) return existing;
+
+    try {
+      return await prisma.roadmapProgress.create({
+        data: {
+          roadmapId,
+          completedPhaseIds: [],
+          completedTopicIds: [],
+          completedQuizPhaseIds: [],
+          currentPhaseId: firstPhaseId,
+          currentTopicId: firstTopicId,
+        },
+      });
+    } catch (e) {
+      throw new InternalException(
+        "Failed to initialize progress",
+        ErrorCode.INTERNAL_EXCEPTION,
+        e,
+      );
     }
-
-    const progress = await prisma.roadmapProgress.create({
-      data: {
-        roadmapId,
-        completedPhases: [],
-        completedTopics: [],
-        currentPhase: 0,
-        totalTimeSpent: 0,
-      },
-    });
-
-    return progress;
   }
 
-  /**
-   * Get progress for a roadmap
-   */
-  async getProgress(roadmapId: string): Promise<any | null> {
+  async getProgress(roadmapId: string, userId: string) {
+    await this.getUserRoadmapOrThrow(roadmapId, userId);
+
     const progress = await prisma.roadmapProgress.findUnique({
       where: { roadmapId },
-      include: {
-        roadmap: {
-          select: {
-            id: true,
-            title: true,
-            goal: true,
-            roadmapData: true,
-          },
-        },
-      },
     });
+
+    if (!progress) {
+      const created = await this.initializeProgress(roadmapId, userId);
+      return created;
+    }
 
     return progress;
   }
 
-  /**
-   * Update progress for a roadmap
-   */
-  async updateProgress(
-    roadmapId: string,
-    updates: ProgressUpdate
-  ): Promise<any> {
-    const currentProgress = await this.getProgress(roadmapId);
+  async viewTopic(roadmapId: string, userId: string, phaseId: string, topicId: string) {
+    const roadmap = await this.getUserRoadmapOrThrow(roadmapId, userId);
+    const data = roadmap.roadmapData as any;
 
-    if (!currentProgress) {
-      throw new Error("Progress not found for roadmap");
+    const { phaseToTopicIds } = extractRoadmapIds(data);
+
+    const topicIds = phaseToTopicIds[phaseId] || [];
+    if (!topicIds.length) {
+      throw new NotFoundException("Phase not found", ErrorCode.NOT_FOUND);
+    }
+    if (!topicIds.includes(topicId)) {
+      throw new NotFoundException("Topic not found", ErrorCode.NOT_FOUND);
     }
 
-    const updateData: any = {
-      lastAccessedAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    if (updates.completedPhases !== undefined) {
-      updateData.completedPhases = updates.completedPhases;
+    try {
+      return await prisma.roadmapProgress.update({
+        where: { roadmapId },
+        data: {
+          currentPhaseId: phaseId,
+          currentTopicId: topicId,
+          lastAccessedAt: new Date(),
+        },
+      });
+    } catch (e) {
+      throw new InternalException(
+        "Failed to update current topic",
+        ErrorCode.INTERNAL_EXCEPTION,
+        e,
+      );
     }
-
-    if (updates.completedTopics !== undefined) {
-      updateData.completedTopics = updates.completedTopics;
-    }
-
-    if (updates.currentPhase !== undefined) {
-      updateData.currentPhase = updates.currentPhase;
-    }
-
-    if (updates.currentTopic !== undefined) {
-      updateData.currentTopic = updates.currentTopic;
-    }
-
-    if (updates.timeSpent !== undefined) {
-      updateData.totalTimeSpent =
-        currentProgress.totalTimeSpent + updates.timeSpent;
-    }
-
-    const updatedProgress = await prisma.roadmapProgress.update({
-      where: { roadmapId },
-      data: updateData,
-    });
-
-    return updatedProgress;
   }
 
-  /**
-   * Calculate completion percentage for a roadmap
-   */
-  async calculateCompletionPercentage(roadmapId: string): Promise<number> {
-    const progress = await this.getProgress(roadmapId);
+  async completeTopic(roadmapId: string, userId: string, phaseId: string, topicId: string) {
+    const roadmap = await this.getUserRoadmapOrThrow(roadmapId, userId);
+    const progress = await this.getProgress(roadmapId, userId);
+    const data = roadmap.roadmapData as any;
 
-    if (!progress || !progress.roadmap) {
-      return 0;
+    const { phaseToTopicIds, topicIdToNext } = extractRoadmapIds(data);
+
+    const topicIdsInPhase = phaseToTopicIds[phaseId] || [];
+    if (!topicIdsInPhase.length) {
+      throw new NotFoundException("Phase not found", ErrorCode.NOT_FOUND);
+    }
+    if (!topicIdsInPhase.includes(topicId)) {
+      throw new NotFoundException("Topic not found", ErrorCode.NOT_FOUND);
     }
 
-    const roadmapData = progress.roadmap.roadmapData as any;
-    const phases = roadmapData.phases || [];
+    const completedTopicIds = new Set(toStringArray(progress.completedTopicIds));
+    completedTopicIds.add(topicId);
 
-    if (phases.length === 0) {
-      return 0;
+    const phaseAllDone =
+      topicIdsInPhase.length > 0 &&
+      topicIdsInPhase.every((id) => completedTopicIds.has(id));
+
+    const nav = topicIdToNext[topicId] || {};
+    let nextTopicId: string | null = null;
+    let nextPhaseId: string | null = null;
+
+    if (nav.nextTopicId) {
+      nextTopicId = nav.nextTopicId;
+      nextPhaseId = phaseId;
+    } else if (nav.nextPhaseId) {
+      nextPhaseId = nav.nextPhaseId;
+      const firstTopic = (phaseToTopicIds[nextPhaseId] || [])[0] || null;
+      nextTopicId = firstTopic;
+    } else {
+      nextPhaseId = null;
+      nextTopicId = null;
     }
 
-    // Count total topics
-    let totalTopics = 0;
-    phases.forEach((phase: any) => {
-      totalTopics += phase.topics?.length || 0;
-    });
+    try {
+      const updated = await prisma.roadmapProgress.update({
+        where: { roadmapId },
+        data: {
+          completedTopicIds: Array.from(completedTopicIds),
+          currentPhaseId: nextPhaseId,
+          currentTopicId: nextTopicId,
+          lastAccessedAt: new Date(),
+        },
+      });
 
-    if (totalTopics === 0) {
-      return 0;
+      return { updated, phaseAllDone };
+    } catch (e) {
+      throw new InternalException(
+        "Failed to complete topic",
+        ErrorCode.INTERNAL_EXCEPTION,
+        e,
+      );
     }
-
-    // Count completed topics
-    const completedTopics = (progress.completedTopics as any[]) || [];
-    const completionPercentage = (completedTopics.length / totalTopics) * 100;
-
-    return Math.round(completionPercentage);
   }
 
-  /**
-   * Mark a phase as completed
-   */
-  async completePhase(roadmapId: string, phaseIndex: number): Promise<any> {
-    const progress = await this.getProgress(roadmapId);
+  async completePhaseQuiz(roadmapId: string, userId: string, phaseId: string, passed: boolean) {
+    const roadmap = await this.getUserRoadmapOrThrow(roadmapId, userId);
+    const progress = await this.getProgress(roadmapId, userId);
+    const data = roadmap.roadmapData as any;
 
-    if (!progress) {
-      throw new Error("Progress not found");
+    const { phaseToTopicIds } = extractRoadmapIds(data);
+
+    const topicIdsInPhase = phaseToTopicIds[phaseId] || [];
+    if (!topicIdsInPhase.length) {
+      throw new NotFoundException("Phase not found", ErrorCode.NOT_FOUND);
     }
 
-    const completedPhases = (progress.completedPhases as number[]) || [];
+    const completedTopicIds = new Set(toStringArray(progress.completedTopicIds));
+    const allTopicsDone = topicIdsInPhase.every((id) => completedTopicIds.has(id));
 
-    if (!completedPhases.includes(phaseIndex)) {
-      completedPhases.push(phaseIndex);
+    if (!allTopicsDone) {
+      throw new BadRequestException(
+        "Complete all topics before taking the quiz",
+        ErrorCode.BAD_REQUEST,
+      );
     }
 
-    return await this.updateProgress(roadmapId, {
-      completedPhases,
-      currentPhase: phaseIndex + 1,
-    });
+    if (!passed) {
+      // quiz not passed, do not mark completed
+      return { updated: progress, phaseCompleted: false };
+    }
+
+    const completedPhaseIds = new Set(toStringArray(progress.completedPhaseIds));
+    const completedQuizPhaseIds = new Set(toStringArray(progress.completedQuizPhaseIds));
+
+    completedPhaseIds.add(phaseId);
+    completedQuizPhaseIds.add(phaseId);
+
+    try {
+      const updated = await prisma.roadmapProgress.update({
+        where: { roadmapId },
+        data: {
+          completedPhaseIds: Array.from(completedPhaseIds),
+          completedQuizPhaseIds: Array.from(completedQuizPhaseIds),
+          lastAccessedAt: new Date(),
+        },
+      });
+
+      return { updated, phaseCompleted: true };
+    } catch (e) {
+      throw new InternalException(
+        "Failed to complete phase quiz",
+        ErrorCode.INTERNAL_EXCEPTION,
+        e,
+      );
+    }
   }
 
-  /**
-   * Mark a topic as completed
-   */
-  async completeTopic(roadmapId: string, topicPath: string): Promise<any> {
-    const progress = await this.getProgress(roadmapId);
+  async addTimeSpent(roadmapId: string, userId: string, timeSpent: number) {
+    await this.getUserRoadmapOrThrow(roadmapId, userId);
 
-    if (!progress) {
-      throw new Error("Progress not found");
+    try {
+      return await prisma.roadmapProgress.update({
+        where: { roadmapId },
+        data: {
+          totalTimeSpent: { increment: timeSpent },
+          lastAccessedAt: new Date(),
+        },
+      });
+    } catch (e) {
+      throw new InternalException(
+        "Failed to add time spent",
+        ErrorCode.INTERNAL_EXCEPTION,
+        e,
+      );
     }
-
-    const completedTopics = (progress.completedTopics as string[]) || [];
-
-    if (!completedTopics.includes(topicPath)) {
-      completedTopics.push(topicPath);
-    }
-
-    return await this.updateProgress(roadmapId, {
-      completedTopics,
-      currentTopic: topicPath,
-    });
   }
 
-  /**
-   * Reset progress for a roadmap
-   */
-  async resetProgress(roadmapId: string): Promise<any> {
-    return await prisma.roadmapProgress.update({
-      where: { roadmapId },
-      data: {
-        completedPhases: [],
-        completedTopics: [],
-        currentPhase: 0,
-        currentTopic: null,
-        totalTimeSpent: 0,
-        lastAccessedAt: new Date(),
-      },
-    });
+  async reset(roadmapId: string, userId: string) {
+    const roadmap = await this.getUserRoadmapOrThrow(roadmapId, userId);
+    const data = roadmap.roadmapData as any;
+    const { phaseIds, phaseToTopicIds } = extractRoadmapIds(data);
+
+    const firstPhaseId = phaseIds[0] ?? null;
+    const firstTopicId =
+      firstPhaseId ? (phaseToTopicIds[firstPhaseId]?.[0] ?? null) : null;
+
+    try {
+      return await prisma.roadmapProgress.update({
+        where: { roadmapId },
+        data: {
+          completedPhaseIds: [],
+          completedTopicIds: [],
+          completedQuizPhaseIds: [],
+          currentPhaseId: firstPhaseId,
+          currentTopicId: firstTopicId,
+          totalTimeSpent: 0,
+          lastAccessedAt: new Date(),
+        },
+      });
+    } catch (e) {
+      throw new InternalException(
+        "Failed to reset progress",
+        ErrorCode.INTERNAL_EXCEPTION,
+        e,
+      );
+    }
+  }
+
+  async calculateCompletionPercentage(roadmapId: string, userId: string) {
+    const roadmap = await this.getUserRoadmapOrThrow(roadmapId, userId);
+    const progress = await this.getProgress(roadmapId, userId);
+
+    const data = roadmap.roadmapData as any;
+    const { phaseToTopicIds } = extractRoadmapIds(data);
+
+    const allTopicIds = Object.values(phaseToTopicIds).flat();
+    const total = allTopicIds.length;
+
+    if (total === 0) return 0;
+
+    const completed = new Set(toStringArray(progress.completedTopicIds));
+    const validCompletedCount = allTopicIds.filter((id) => completed.has(id)).length;
+
+    return Math.round((validCompletedCount / total) * 100);
   }
 }
 

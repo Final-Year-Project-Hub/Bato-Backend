@@ -186,35 +186,119 @@ components:
         roadmapId:
           type: string
           format: uuid
-        completedPhases:
+        completedPhaseIds:
           type: array
-          items:
-            type: integer
-        completedTopics:
-          type: array
+          description: Phase UUIDs completed (after passing quiz)
           items:
             type: string
-        currentPhase:
-          type: integer
-        currentTopic:
+            format: uuid
+        completedQuizPhaseIds:
+          type: array
+          description: Phase UUIDs for which quiz was completed/passed
+          items:
+            type: string
+            format: uuid
+        completedTopicIds:
+          type: array
+          description: Topic UUIDs completed (ticked done)
+          items:
+            type: string
+            format: uuid
+        currentPhaseId:
           type: string
+          format: uuid
           nullable: true
+          description: Current phase pointer for resume/continue learning
+        currentTopicId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Current topic pointer for resume/continue learning
         totalTimeSpent:
           type: number
-          format: float
+          description: Total time spent learning (unit depends on your implementation)
+          example: 1200
         lastAccessedAt:
           type: string
           format: date-time
+          nullable: true
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
+
+    ProgressResponse:
+      type: object
+      properties:
+        progress:
+          $ref: "#/components/schemas/Progress"
         completionPercentage:
+          type: integer
+          example: 45
+
+    ViewTopicRequest:
+      type: object
+      required: [phaseId, topicId]
+      properties:
+        phaseId:
+          type: string
+          format: uuid
+        topicId:
+          type: string
+          format: uuid
+
+    CompleteTopicRequest:
+      type: object
+      required: [phaseId, topicId]
+      properties:
+        phaseId:
+          type: string
+          format: uuid
+        topicId:
+          type: string
+          format: uuid
+
+    CompleteTopicResponse:
+      type: object
+      properties:
+        progress:
+          $ref: "#/components/schemas/Progress"
+        phaseAllDone:
+          type: boolean
+          example: true
+        completionPercentage:
+          type: integer
+          example: 55
+
+    CompletePhaseQuizRequest:
+      type: object
+      required: [phaseId, passed]
+      properties:
+        phaseId:
+          type: string
+          format: uuid
+        passed:
+          type: boolean
+          example: true
+
+    CompletePhaseQuizResponse:
+      type: object
+      properties:
+        progress:
+          $ref: "#/components/schemas/Progress"
+        phaseCompleted:
+          type: boolean
+          example: true
+
+    AddTimeSpentRequest:
+      type: object
+      required: [timeSpent]
+      properties:
+        timeSpent:
           type: number
-          format: float
-          description: Calculated field, not stored in database
+          example: 120
 
     TopicDetail:
       type: object
@@ -528,6 +612,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+
+
 
   /auth/profile:
     get:
@@ -1471,7 +1557,7 @@ paths:
   /api/roadmap/{roadmapId}/progress:
     get:
       summary: Get progress
-      description: Get learning progress for a specific roadmap
+      description: Get learning progress for a roadmap (includes completion percentage)
       tags:
         - Progress
       security:
@@ -1486,68 +1572,30 @@ paths:
             format: uuid
       responses:
         "200":
-          description: Progress details
+          description: Progress fetched successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  data:
-                    $ref: "#/components/schemas/Progress"
+                $ref: "#/components/schemas/ProgressResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          description: Progress not found
-
-    patch:
-      summary: Update progress
-      description: Update learning progress for a roadmap
-      tags:
-        - Progress
-      security:
-        - BearerAuth: []
-        - CookieAuth: []
-      parameters:
-        - name: roadmapId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                completedPhases:
-                  type: array
-                  items:
-                    type: integer
-                completedTopics:
-                  type: array
-                  items:
-                    type: string
-                currentPhase:
-                  type: integer
-      responses:
-        "200":
-          description: Progress updated
+          description: Roadmap not found
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  data:
-                    $ref: "#/components/schemas/Progress"
+                $ref: "#/components/schemas/Error"
 
-  /api/roadmap/{roadmapId}/progress/complete-phase:
+  /api/roadmap/{roadmapId}/progress/view-topic:
     post:
-      summary: Complete phase
-      description: Mark a learning phase as completed
+      summary: View topic (update current pointers)
+      description: |
+        Updates currentPhaseId/currentTopicId for resume tracking.
+        Does NOT mark the topic completed.
       tags:
         - Progress
       security:
@@ -1565,30 +1613,37 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - phaseIndex
-              properties:
-                phaseIndex:
-                  type: integer
-                  minimum: 0
+              $ref: "#/components/schemas/ViewTopicRequest"
       responses:
         "200":
-          description: Phase completed
+          description: Current topic pointers updated
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                  data:
+                  progress:
                     $ref: "#/components/schemas/Progress"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Phase or topic not found in roadmap
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /api/roadmap/{roadmapId}/progress/complete-topic:
     post:
       summary: Complete topic
-      description: Mark a learning topic as completed
+      description: |
+        Marks a topic as completed by topicId (UUID).
+        Validates topic belongs to the given phase.
+        Returns updated progress + whether the whole phase topics are completed + completion percentage.
       tags:
         - Progress
       security:
@@ -1606,30 +1661,127 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - topicPath
-              properties:
-                topicPath:
-                  type: string
-                  example: "phase-0.topic-1"
+              $ref: "#/components/schemas/CompleteTopicRequest"
       responses:
         "200":
-          description: Topic completed
+          description: Topic completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompleteTopicResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Phase or topic not found in roadmap
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/roadmap/{roadmapId}/progress/complete-phase-quiz:
+    post:
+      summary: Complete phase quiz (mark phase completed)
+      description: |
+        Marks a phase completed only after quiz completion.
+        Requires that ALL topics in the phase are completed before quiz can complete.
+        If passed=false, phaseCompleted will be false and phase won't be marked completed.
+      tags:
+        - Progress
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: roadmapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompletePhaseQuizRequest"
+      responses:
+        "200":
+          description: Phase quiz processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompletePhaseQuizResponse"
+        "400":
+          description: Topics not completed for phase (quiz gated)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Phase not found in roadmap
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/roadmap/{roadmapId}/progress/time-spent:
+    post:
+      summary: Add time spent
+      description: Increment totalTimeSpent for the roadmap progress.
+      tags:
+        - Progress
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: roadmapId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddTimeSpentRequest"
+      responses:
+        "200":
+          description: Time spent added successfully
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                  data:
+                  progress:
                     $ref: "#/components/schemas/Progress"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Roadmap not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /api/roadmap/{roadmapId}/progress/reset:
     post:
       summary: Reset progress
-      description: Reset all learning progress for a roadmap
+      description: Reset learning progress for a roadmap (clears completion arrays and resets pointers)
       tags:
         - Progress
       security:
@@ -1650,10 +1802,20 @@ paths:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                  data:
+                  progress:
                     $ref: "#/components/schemas/Progress"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Roadmap not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   # ==================== Quiz Endpoints ====================
   /api/quiz/generate/{topicContentId}:

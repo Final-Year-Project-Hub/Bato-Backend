@@ -88,10 +88,11 @@ model Message {
 model RoadmapProgress {
   id              String   @id @default(uuid())
   roadmapId       String   @unique
-  completedPhases Json     @default("[]")
-  completedTopics Json     @default("[]")
-  currentPhase    Int      @default(0)
-  currentTopic    String?
+  completedPhaseIds Json     @default("[]")  // string[]
+  completedTopicIds Json     @default("[]")  // string[]
+  completedQuizPhaseIds Json @default("[]") 
+  currentPhaseId   String?
+  currentTopicId   String?
   totalTimeSpent  Float    @default(0)
   lastAccessedAt  DateTime @default(now())
   createdAt       DateTime @default(now())

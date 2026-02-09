@@ -9,25 +9,41 @@ const router = Router({ mergeParams: true });
 router.use(verifyUser);
 
 // Progress routes (nested under /roadmaps/:roadmapId/progress)
+
+// Get progress + completion percentage
 router.get(
   "/",
-  errorHandler(progressController.getProgress.bind(progressController))
+  errorHandler(progressController.getProgress.bind(progressController)),
 );
-router.patch(
-  "/",
-  errorHandler(progressController.updateProgress.bind(progressController))
-);
+
+// When user opens/views a topic (updates currentPhaseId/currentTopicId)
 router.post(
-  "/complete-phase",
-  errorHandler(progressController.completePhase.bind(progressController))
+  "/view-topic",
+  errorHandler(progressController.viewTopic.bind(progressController)),
 );
+
+// Mark a topic completed (adds to completedTopicIds, returns phaseAllDone + percentage)
 router.post(
   "/complete-topic",
-  errorHandler(progressController.completeTopic.bind(progressController))
+  errorHandler(progressController.completeTopic.bind(progressController)),
 );
+
+// Complete phase only after quiz (requires all topics completed + passed=true)
+router.post(
+  "/complete-phase-quiz",
+  errorHandler(progressController.completePhaseQuiz.bind(progressController)),
+);
+
+// Add time spent (increments totalTimeSpent)
+router.post(
+  "/time-spent",
+  errorHandler(progressController.addTimeSpent.bind(progressController)),
+);
+
+// Reset progress for roadmap
 router.post(
   "/reset",
-  errorHandler(progressController.resetProgress.bind(progressController))
+  errorHandler(progressController.resetProgress.bind(progressController)),
 );
 
 export default router;

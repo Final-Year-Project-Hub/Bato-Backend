@@ -69,7 +69,7 @@ export async function getTopicDetail(req: Request, res: Response) {
       `[Topic] Fetching detail for topicId=${topicId}, phaseId=${phaseId}`,
     );
 
-    // ✅ 1) Cache lookup by IDs
+    // 1) Cache lookup by IDs
     let cachedContent = null;
     if (roadmapId) {
       cachedContent = await prisma.topicContent.findUnique({
@@ -90,7 +90,7 @@ export async function getTopicDetail(req: Request, res: Response) {
 
     console.log(`[Topic] Fetching from FastAPI (not cached)`);
 
-    // ✅ 2) Call FastAPI using IDs (you must implement this endpoint in FastAPI)
+    //  2) Call FastAPI using IDs (you must implement this endpoint in FastAPI)
     const fastApiUrl = process.env.FASTAPI_URL || DEFAULT_FASTAPI_URL;
 
     // Example ID-based endpoint:
@@ -136,15 +136,15 @@ export async function getTopicDetail(req: Request, res: Response) {
           },
         });
         console.log(
-          `[Topic] 💾 Cached content in database with ID: ${createdContent.id}`,
+          `[Topic]  Cached content in database with ID: ${createdContent.id}`,
         );
       } catch (cacheError) {
         // If caching fails (e.g., duplicate), just log and continue
-        console.warn(`[Topic] ⚠️ Failed to cache content:`, cacheError);
+        console.warn(`[Topic]  Failed to cache content:`, cacheError);
       }
     }
 
-    console.log(`[Topic] ✅ Successfully fetched topic detail`);
+    console.log(`[Topic]  Successfully fetched topic detail`);
 
     res.json(topicDetail);
   } catch (error: any) {
@@ -184,12 +184,12 @@ export async function getTopicStream(req: Request, res: Response) {
       `[Topic Stream] Starting stream for topicId=${topicId}, phaseId=${phaseId}`,
     );
 
-    // ✅ SSE headers
+    //  SSE headers
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
 
-    // ✅ 1) Cache lookup by IDs
+    //  1) Cache lookup by IDs
     let cachedContent = null;
     if (roadmapId) {
       cachedContent = await prisma.topicContent.findUnique({
@@ -240,15 +240,7 @@ export async function getTopicStream(req: Request, res: Response) {
       }
     }
 
-    console.log(`[Topic Stream] Extracted values:`, {
-      phaseNumber,
-      topicTitle,
-      phaseTitle,
-      phaseId,
-      topicId,
-    });
-
-    // ✅ 2) Call FastAPI stream using extracted values
+    //  2) Call FastAPI stream using extracted values
     const fastApiUrl = process.env.FASTAPI_URL || DEFAULT_FASTAPI_URL;
 
     const endpoint = `${fastApiUrl}/api/v1/topic/stream/${phaseNumber}/${encodeURIComponent(topicTitle)}?phase_title=${encodeURIComponent(phaseTitle)}&goal=${encodeURIComponent(goal)}`;
@@ -283,7 +275,7 @@ export async function getTopicStream(req: Request, res: Response) {
 
     res.end();
 
-    // ✅ 3) Parse and cache after stream ends
+    //  3) Parse and cache after stream ends
     try {
       const { parseAndValidateTopicDetail } =
         await import("../utils/json-parser");

@@ -1,36 +1,24 @@
 import { z } from "zod";
 
-/**
- * Schema for updating progress
- */
-export const UpdateProgressSchema = z.object({
-  completedPhases: z.array(z.number().int().nonnegative()).optional(),
-  completedTopics: z.array(z.string()).optional(),
-  currentPhase: z.number().int().nonnegative().optional(),
-  currentTopic: z.string().optional(),
-  timeSpent: z.number().nonnegative().optional(),
+export const RoadmapIdParamsSchema = z.object({
+  roadmapId: z.string().uuid("Invalid roadmapId"),
 });
 
-/**
- * Schema for completing a phase
- */
-export const CompletePhaseSchema = z.object({
-  phaseIndex: z
-    .number()
-    .int()
-    .nonnegative("Phase index must be a non-negative integer"),
+export const ViewTopicSchema = z.object({
+  phaseId: z.string().uuid("Invalid phaseId"),
+  topicId: z.string().uuid("Invalid topicId"),
 });
 
-/**
- * Schema for completing a topic
- */
 export const CompleteTopicSchema = z.object({
-  topicPath: z.string().min(1, "Topic path is required"),
+  phaseId: z.string().uuid("Invalid phaseId"),
+  topicId: z.string().uuid("Invalid topicId"),
 });
 
-/**
- * Schema for roadmap ID parameter
- */
-export const RoadmapIdParamSchema = z.object({
-  roadmapId: z.string().uuid("Invalid roadmap ID"),
+export const CompletePhaseQuizSchema = z.object({
+  phaseId: z.string().uuid("Invalid phaseId"),
+  passed: z.boolean(),
+});
+
+export const UpdateTimeSpentSchema = z.object({
+  timeSpent: z.number().min(0),
 });

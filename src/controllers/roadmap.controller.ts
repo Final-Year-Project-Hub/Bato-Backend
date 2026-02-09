@@ -461,7 +461,7 @@ export async function selectRoadmap(req: Request, res: Response) {
     });
 
     // Initialize progress tracking when selected
-    await progressService.initializeProgress(id);
+    await progressService.initializeProgress(id, user.id);
 
     res.json({
       success: true,
