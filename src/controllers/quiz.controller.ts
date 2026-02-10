@@ -50,9 +50,6 @@ export const submitQuizAttempt = async (req: Request, res: Response) => {
       },
     });
 
-    const passingScore = quiz.passingScore || 70;
-    const passed = score >= passingScore;
-
     if (passed) {
       await progressService.completeTopic(
         quiz.topicContent.roadmapId,
