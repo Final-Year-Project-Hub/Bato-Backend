@@ -14,7 +14,7 @@ import { errorHandler } from "../middlewares/error-handler";
 import { verifyUser, verifyAdmin } from "../middlewares/auth.middleware";
 import { ApiResponse } from "../utils/apiResponse";
 import passport from "passport";
-import { generateAccessToken, generateRefreshToken } from "../utils/jwt";
+import { generateAccessandRefreshToken } from "../controllers/auth.controller";
 import { prisma } from "@/lib/prisma";
 import jwt, { JwtPayload } from "jsonwebtoken";
 const router: Router = Router();
@@ -91,8 +91,9 @@ router.get(
     try {
       const user = req.user as any;
 
-      const accessToken = generateAccessToken(user.id);
-      const refreshToken = generateRefreshToken(user.id);
+      const { accessToken, refreshToken } = await generateAccessandRefreshToken(
+        user.id,
+      );
 
       console.log("Access token:", accessToken);
       console.log("Refresh token:", refreshToken);
