@@ -128,8 +128,21 @@ export async function getTopicDetail(req: Request, res: Response) {
     // Cache the content in database if roadmapId is provided
     if (roadmapId) {
       try {
-        const createdContent = await prisma.topicContent.create({
-          data: {
+        const createdContent = await prisma.topicContent.upsert({
+          where: {
+            roadmapId_phaseId_topicId: {
+              roadmapId,
+              phaseId,
+              topicId,
+            },
+          },
+          update: {
+            topicTitle: topicDetail.title || "Untitled Topic",
+            phaseNumber: topicDetail.phase_number || 0,
+            phaseTitle: topicDetail.phase_title || "Untitled Phase",
+            content: topicDetail as any,
+          },
+          create: {
             roadmapId,
             phaseId,
             topicId,
@@ -328,8 +341,21 @@ export async function getTopicStream(req: Request, res: Response) {
           }
         }
 
-        await prisma.topicContent.create({
-          data: {
+        await prisma.topicContent.upsert({
+          where: {
+            roadmapId_phaseId_topicId: {
+              roadmapId,
+              phaseId,
+              topicId,
+            },
+          },
+          update: {
+            topicTitle,
+            phaseNumber,
+            phaseTitle,
+            content: parsed as any,
+          },
+          create: {
             roadmapId,
             phaseId,
             topicId,

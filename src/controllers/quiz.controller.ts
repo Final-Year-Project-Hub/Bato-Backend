@@ -31,6 +31,8 @@ export const submitQuizAttempt = async (req: Request, res: Response) => {
       answers,
     );
 
+    const passed = score >= (quiz.passingScore || 70);
+
     // Save attempt
     const attempt = await prisma.quizAttempt.create({
       data: {
@@ -42,6 +44,7 @@ export const submitQuizAttempt = async (req: Request, res: Response) => {
         totalQuestions: quiz.totalQuestions,
         correctAnswers,
         timeSpent: timeSpent || null,
+        result: passed,
       },
     });
 
@@ -51,7 +54,7 @@ export const submitQuizAttempt = async (req: Request, res: Response) => {
       correctAnswers,
       totalQuestions: quiz.totalQuestions,
       feedback,
-      passed: score >= (quiz.passingScore || 70),
+      result: passed,
     });
   } catch (error: any) {
     console.error("Error submitting quiz attempt:", error);
@@ -170,8 +173,6 @@ export const generateQuizForTopic = async (req: Request, res: Response) => {
         codeQuestionCount: quizData.metadata?.codeQuestionCount || 0,
       },
     });
-
-
 
     // 6. Return sanitized quiz
     res.json(sanitizeQuiz(savedQuiz));

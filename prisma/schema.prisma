@@ -244,7 +244,7 @@ model QuizAttempt {
   score           Float        // Percentage score (0-100)
   totalQuestions  Int
   correctAnswers  Int
-
+  result          Boolean?
   // Metadata
   timeSpent       Int?         // Time spent in seconds
   completedAt     DateTime     @default(now())
