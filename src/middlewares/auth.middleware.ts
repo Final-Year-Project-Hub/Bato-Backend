@@ -31,14 +31,12 @@ export const verifyUser = async (
         ErrorCode.UNAUTHORIZED_REQUEST,
       );
     }
-    console.log("Access token:", accessToken);
 
     try {
       const decoded = jwt.verify(
         accessToken,
         process.env.ACCESS_TOKEN_SECRET!,
       ) as TokenPayload;
-      console.log("Decoded token:", decoded);
       const user = await prisma.user.findUnique({
         where: { id: decoded.data.id },
         select: {
@@ -55,8 +53,6 @@ export const verifyUser = async (
           ErrorCode.UNAUTHORIZED_REQUEST,
         );
       }
-      console.log("User found:", user);
-
       (req as any).user = user;
       return next();
     } catch (error: any) {

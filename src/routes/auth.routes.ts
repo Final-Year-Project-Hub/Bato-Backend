@@ -95,14 +95,6 @@ router.get(
         user.id,
       );
 
-      console.log("Access token:", accessToken);
-      console.log("Refresh token:", refreshToken);
-
-      console.log(
-        "Decoded Access Token :",
-        jwt.verify(accessToken, process.env.ACCESS_TOKEN_SECRET!),
-      );
-
       // ✅ Save refreshToken in DB
       await prisma.user.update({
         where: { id: user.id },

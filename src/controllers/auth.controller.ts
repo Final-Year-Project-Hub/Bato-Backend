@@ -362,7 +362,6 @@ if(purpose === "FORGOT_PASSWORD" && purpose !== "EMAIL_VERIFICATION"){
     secret,
     { expiresIn: "10m" }
   );
-  console.log("Reset Token : ",resetToken);
   const hashedResetToken = await hashPassword(resetToken);
   
   const update = await prisma.user.update({

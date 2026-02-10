@@ -230,7 +230,11 @@ export async function getTopicStream(req: Request, res: Response) {
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
-      res.write(`data: ${JSON.stringify(cachedContent.content)}\n\n`);
+      const responseData = {
+        ...(cachedContent.content as any),
+        topicContentId: cachedContent.id,
+      };
+      res.write(`data: ${JSON.stringify(responseData)}\n\n`);
       return res.end();
     }
 
