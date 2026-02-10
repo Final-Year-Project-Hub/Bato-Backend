@@ -31,13 +31,14 @@ export const verifyUser = async (
         ErrorCode.UNAUTHORIZED_REQUEST,
       );
     }
+    console.log("Access token:", accessToken);
 
     try {
       const decoded = jwt.verify(
         accessToken,
         process.env.ACCESS_TOKEN_SECRET!,
       ) as TokenPayload;
-
+      console.log("Decoded token:", decoded);
       const user = await prisma.user.findUnique({
         where: { id: decoded.data.id },
         select: {
@@ -54,6 +55,7 @@ export const verifyUser = async (
           ErrorCode.UNAUTHORIZED_REQUEST,
         );
       }
+      console.log("User found:", user);
 
       (req as any).user = user;
       return next();
@@ -124,18 +126,22 @@ export const verifyUser = async (
   }
 };
 
-export const verifyAdmin = async(req:Request,res:Response,next:NextFunction)=>{
-  if(!req.user){
+export const verifyAdmin = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  if (!req.user) {
     throw new UnauthorizedException(
       "Unauthorized. No admin access token provided",
       ErrorCode.UNAUTHORIZED_REQUEST,
     );
   }
-  if(req.user.role !== "ADMIN"){
+  if (req.user.role !== "ADMIN") {
     throw new UnauthorizedException(
       "Unauthorized. Admin only allowded",
       ErrorCode.UNAUTHORIZED_REQUEST,
     );
   }
   next();
-}
+};
