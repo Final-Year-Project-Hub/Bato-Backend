@@ -44,26 +44,52 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, postman) only in development
-      if (!origin && process.env.NODE_ENV === "development") {
-        return callback(null, true);
-      }
+const corsOAuth = cors({
+  origin: true,
+  credentials: true,
+});
 
-      if (!origin || allowedOrigins.indexOf(origin) === -1) {
-        const msg =
-          "The CORS policy for this site does not allow access from the specified Origin.";
-        return callback(new Error(msg), false);
-      }
-      return callback(null, true);
-    },
-    credentials: true,
-  }),
-);
+// ✅ Strict CORS for API calls (fetch/XHR)
+const corsStrict = cors({
+  origin: (origin, callback) => {
+    // ✅ Allow requests with no Origin (OAuth redirects, browser navigation, server-to-server, Postman)
+    // If you want to be extra strict: allow only in GET/HEAD, but simplest is allow.
+    if (!origin) return callback(null, true);
 
-// Better Auth route handler removed
+    if (!allowedOrigins.includes(origin)) {
+      const msg =
+        "The CORS policy for this site does not allow access from the specified Origin.";
+      return callback(new Error(msg), false);
+    }
+
+    return callback(null, true);
+  },
+  credentials: true,
+});
+
+// app.use(
+//   cors({
+//     origin: (origin, callback) => {
+//       // Allow requests with no origin (like mobile apps, curl, postman) only in development
+//       if (!origin && process.env.NODE_ENV === "development") {
+//         return callback(null, true);
+//       }
+
+//       if (!origin || allowedOrigins.indexOf(origin) === -1) {
+//         const msg =
+//           "The CORS policy for this site does not allow access from the specified Origin.";
+//         return callback(new Error(msg), false);
+//       }
+//       return callback(null, true);
+//     },
+//     credentials: true,
+//   }),
+// );
+
+app.use("/auth/google", corsOAuth);
+app.use("/auth/google/callback", corsOAuth);
+
+app.use(corsStrict);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
