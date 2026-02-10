@@ -91,7 +91,7 @@ export const getQuizHistory = async (req: Request, res: Response) => {
  */
 export const generateQuizForTopic = async (req: Request, res: Response) => {
   try {
-    const { topicContentId } = req.params;
+    const { topicContentId } = req.params as { topicContentId: string };
     console.log(
       `[Quiz Controller] Received generation request for topicContentId: ${topicContentId}`,
     );
@@ -171,11 +171,7 @@ export const generateQuizForTopic = async (req: Request, res: Response) => {
       },
     });
 
-    // 5. Update TopicContent for legacy support (optional, can be removed)
-    await prisma.topicContent.update({
-      where: { id: topicContentId },
-      data: { quiz: quizData },
-    });
+
 
     // 6. Return sanitized quiz
     res.json(sanitizeQuiz(savedQuiz));
