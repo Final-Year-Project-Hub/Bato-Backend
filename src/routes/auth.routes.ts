@@ -32,8 +32,58 @@ router.get("/profile", verifyUser, (req, res) => {
 });
 
 //Google Login
-router.route("/google").get(passport.authenticate("google", { scope: ["profile", "email"],session: false,prompt: "select_account",}));
-router.route("/google/callback").get(passport.authenticate("google", { failureRedirect: `${process.env.FRONTEND_URL}/login`,session: false, }),
+router.get("/google/url", (req, res) => {
+  const backendUrl = process.env.BACKEND_URL; // e.g. https://bato-backend-a9x8.onrender.com
+  if (!backendUrl) {
+    return res.status(500).json({ message: "BACKEND_URL is not set" });
+  }
+
+  const callbackUrl = `${backendUrl.replace(/\/$/, "")}/auth/google/callback`;
+
+  const params = new URLSearchParams({
+    client_id: process.env.GMAIL_CLIENT_ID || "",
+    redirect_uri: callbackUrl,
+    response_type: "code",
+    scope: "openid email profile",
+    prompt: "select_account",
+    access_type: "offline",
+    include_granted_scopes: "true",
+  });
+
+  if (!process.env.GMAIL_CLIENT_ID) {
+    return res.status(500).json({ message: "GOOGLE_CLIENT_ID is not set" });
+  }
+
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+
+  return res.json({
+    success: true,
+    authUrl,
+    callbackUrl, // helpful for debugging (you can remove later)
+  });
+});
+
+/**
+ * ✅ 2) Old /google route stays (browser navigation should hit this)
+ */
+router.get(
+  "/google",
+  passport.authenticate("google", {
+    scope: ["profile", "email"],
+    session: false,
+    prompt: "select_account",
+  })
+);
+
+/**
+ * ✅ 3) Callback route - unchanged core logic
+ */
+router.get(
+  "/google/callback",
+  passport.authenticate("google", {
+    failureRedirect: `${process.env.FRONTEND_URL}/login`,
+    session: false,
+  }),
   async (req, res, next) => {
     try {
       const user = req.user as any;
@@ -41,7 +91,7 @@ router.route("/google/callback").get(passport.authenticate("google", { failureRe
       const accessToken = generateAccessToken(user.id);
       const refreshToken = generateRefreshToken(user.id);
 
-      //  Save refreshToken in DB
+      // ✅ Save refreshToken in DB
       await prisma.user.update({
         where: { id: user.id },
         data: { refreshToken },
@@ -60,6 +110,6 @@ router.route("/google/callback").get(passport.authenticate("google", { failureRe
     } catch (err) {
       next(err);
     }
-  });
-
+  }
+);
 export default router;
