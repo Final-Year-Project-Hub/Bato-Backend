@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import axios from "axios";
+import { progressService } from "../services/progress.service";
 
 const AI_SERVICE_URL = process.env.FASTAPI_URL || "http://localhost:8000";
 
@@ -19,6 +20,7 @@ export const submitQuizAttempt = async (req: Request, res: Response) => {
     // Get the stored quiz for this topic
     const quiz = await prisma.quiz.findFirst({
       where: { topicContentId },
+      include: { topicContent: true },
     });
 
     if (!quiz) {
@@ -45,13 +47,25 @@ export const submitQuizAttempt = async (req: Request, res: Response) => {
       },
     });
 
+    const passingScore = quiz.passingScore || 70;
+    const passed = score >= passingScore;
+
+    if (passed) {
+      await progressService.completeTopic(
+        quiz.topicContent.roadmapId,
+        userId,
+        quiz.topicContent.phaseId,
+        quiz.topicContent.topicId,
+      );
+    }
+
     res.json({
       attemptId: attempt.id,
       score,
       correctAnswers,
       totalQuestions: quiz.totalQuestions,
       feedback,
-      passed: score >= (quiz.passingScore || 70),
+      passed,
     });
   } catch (error: any) {
     console.error("Error submitting quiz attempt:", error);
