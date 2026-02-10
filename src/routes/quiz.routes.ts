@@ -5,6 +5,7 @@ import {
   getQuizHistory,
   generateQuizForTopic,
   getBestAttempt,
+  getQuizStatus,
 } from "../controllers/quiz.controller";
 
 const router = Router();
@@ -23,5 +24,8 @@ router.post("/generate/:topicContentId", generateQuizForTopic);
 
 // Get best attempt for a topic
 router.get("/best/:topicContentId", getBestAttempt);
+
+// Get quiz status by roadmap params
+router.get("/status", getQuizStatus);
 
 export default router;

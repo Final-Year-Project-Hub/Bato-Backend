@@ -1,19 +1,7 @@
-// ============================================================================
-// CORE PARSING LOGIC
-// ============================================================================
-
-/**
- * The Master Parser: Handles all LLM quirks in one place.
- * 1. Markdown code blocks
- * 2. Preambles/Postscripts (finding outer braces)
- * 3. C-style comments (// and / * ... * /)
- * 4. Trailing commas (via regex strategy)
- */
 import { randomUUID } from "crypto";
 
 export function baseParseJSON(content: string): any {
   if (!content) throw new Error("Empty input");
-
   let jsonStr = content.trim();
 
   // 1. Initial Markdown Cleanup
@@ -21,21 +9,42 @@ export function baseParseJSON(content: string): any {
   else if (jsonStr.startsWith("```")) jsonStr = jsonStr.slice(3);
   if (jsonStr.endsWith("```")) jsonStr = jsonStr.slice(0, -3);
 
-  // 2. Robust Extraction (Find outer braces)
-  const firstBrace = jsonStr.indexOf("{");
-  const lastBrace = jsonStr.lastIndexOf("}");
+  // 2. Pre-escape Markdown Code Blocks BEFORE any other processing
+  // (Must run before sanitizeControlCharacters to avoid double-escaping newlines)
+  jsonStr = escapeMarkdownCodeBlocks(jsonStr);
 
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+  // 3. Robust Extraction (Find outermost object OR array)
+  // FIX Bug 5: Also handle array-root JSON like [{ ... }]
+  const firstBrace = jsonStr.indexOf("{");
+  const firstBracket = jsonStr.indexOf("[");
+  const lastBrace = jsonStr.lastIndexOf("}");
+  const lastBracket = jsonStr.lastIndexOf("]");
+
+  const hasObject =
+    firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace;
+  const hasArray =
+    firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket;
+
+  if (hasObject && hasArray) {
+    // Pick whichever root container starts first
+    if (firstBrace < firstBracket) {
+      jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+    } else {
+      jsonStr = jsonStr.substring(firstBracket, lastBracket + 1);
+    }
+  } else if (hasObject) {
     jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+  } else if (hasArray) {
+    jsonStr = jsonStr.substring(firstBracket, lastBracket + 1);
   }
 
-  // 3. Strip Comments (Crucial for "jsx" or commented lines)
+  // 4. Strip Comments
   jsonStr = stripComments(jsonStr);
 
-  // 4. Sanitize Control Characters (Fix streaming issues)
+  // 5. Sanitize Control Characters (Fix streaming issues)
   jsonStr = sanitizeControlCharacters(jsonStr);
 
-  // 5. Handle Double Braces (Common LLM Hallucination)
+  // 6. Handle Double Braces (Common LLM Hallucination)
   if (jsonStr.startsWith("{{")) {
     jsonStr = jsonStr.replace("{{", "{");
   }
@@ -43,18 +52,17 @@ export function baseParseJSON(content: string): any {
     jsonStr = jsonStr.substring(0, jsonStr.length - 2) + "}";
   }
 
-  // 6. Pre-escape Markdown Code Blocks (Crucial for nested codes)
-  // This prevents quotes/newlines inside ```blocks``` from breaking the JSON structure
-  jsonStr = escapeMarkdownCodeBlocks(jsonStr);
+  // 7. Fix Bad Escapes — scoped to string values only
+  // FIX Bug 7: Apply only inside string values, not globally
+  jsonStr = fixBadEscapes(jsonStr);
 
-  // 7. Attempt Parsing with Strategies
+  // 8. Attempt Parsing with Strategies
   const strategies = [
     // A: Clean Parse
     () => JSON.parse(jsonStr),
 
     // B: Remove Trailing Commas (Enhanced)
     () => {
-      // Remove trailing commas before } or ]
       const noTrailing = jsonStr
         .replace(/,(\s*[}\]])/g, "$1")
         .replace(/,(\s*)$/g, "$1");
@@ -70,15 +78,12 @@ export function baseParseJSON(content: string): any {
     // D: Repair Incomplete JSON Structure (with trailing comma fix)
     () => {
       let repaired = repairIncompleteJSON(jsonStr);
-      // Double check for trailing commas after repair
       repaired = repaired.replace(/,(\s*[}\]])/g, "$1");
       return JSON.parse(repaired);
     },
 
     // E: Aggressive Cleanup (for "Expected property name" error)
     () => {
-      // Remove any non-alphanumeric char (except quotes) before a closing brace
-      // This handles cases like { "key": "value" , } or { "key": "value" . }
       const aggressive = jsonStr.replace(/[^"0-9a-zA-Z\s]+(\s*[}])/g, "$1");
       return JSON.parse(aggressive);
     },
@@ -96,85 +101,136 @@ export function baseParseJSON(content: string): any {
   throw new Error(`JSON Parse failed: ${lastError?.message}`);
 }
 
-/**
- * Escapes quotes and newlines inside markdown code blocks (``` ... ```)
- * to prevent them from breaking the JSON string structure.
- */
+// ============================================================================
+// HELPER: isEscaped
+// Checks whether the character at position `index` in `str` is preceded by an
+// odd number of backslashes (i.e. it IS escaped).
+// ============================================================================
+function isEscaped(str: string, index: number): boolean {
+  let backslashCount = 0;
+  let i = index - 1;
+  while (i >= 0 && str[i] === "\\") {
+    backslashCount++;
+    i--;
+  }
+  return backslashCount % 2 !== 0;
+}
+
+// ============================================================================
+// FIX Bug 7: fixBadEscapes — scoped to string values only
+// Fixes bad escaped characters inside JSON string values.
+// e.g., "path": "C:\Windows" -> "path": "C:\\Windows"
+// ============================================================================
+function fixBadEscapes(str: string): string {
+  let result = "";
+  let inString = false;
+  let i = 0;
+
+  while (i < str.length) {
+    const char = str[i];
+
+    // Toggle string tracking using the robust isEscaped helper
+    if (char === '"' && !isEscaped(str, i)) {
+      inString = !inString;
+      result += char;
+      i++;
+      continue;
+    }
+
+    if (inString && char === "\\") {
+      const next = str[i + 1];
+      // Valid JSON escape sequences: " \ / b f n r t u
+      if (next && /["\\/bfnrtu]/.test(next)) {
+        // Valid escape — keep as-is
+        result += char;
+      } else {
+        // Invalid escape — double the backslash
+        result += "\\\\";
+      }
+      i++;
+      continue;
+    }
+
+    result += char;
+    i++;
+  }
+
+  return result;
+}
+
+// ============================================================================
+// FIX Bug 4 + Bug 6: escapeMarkdownCodeBlocks
+// Escapes newlines and ONLY unescaped quotes inside ``` blocks.
+// Must be called BEFORE sanitizeControlCharacters to prevent double-escaping.
+// ============================================================================
 function escapeMarkdownCodeBlocks(str: string): string {
   return str.replace(/```[\s\S]*?```/g, (match) => {
-    // We only want to escape if the block is NOT already properly escaped.
-    // However, knowing that is hard.
-    // Heuristic: If we see literal unescaped newlines or quotes, escape them.
-    // But we preserve the backticks logic? No, usually checking content is enough.
-
-    // 1. Escape literal backslashes first to avoid messing up existing escapes
-    let content = match; //.replace(/\\/g, "\\\\");
-    // (Actually, if valid JSON, backslashes are already escaped. If invalid, maybe not.
-    // Touching backslashes is risky. Let's focus on Newlines and Quotes)
-
-    // Escape Newlines: literal \n -> \\n
+    let content = match;
+    // Escape newlines and carriage returns
     content = content.replace(/\n/g, "\\n");
     content = content.replace(/\r/g, "\\r");
-
-    // Escape Quotes: literal " -> \" (only if not already escaped?)
-    // This is tricky. simpler: Replace " with \"
-    // But what if it was \"? -> \\" (valid literal backslash and quote)
-    // If it was already correct, we might double escape?
-    // Let's assume the parser failed because it WASN'T correct.
-    content = content.replace(/"/g, '\\"');
-
+    // FIX Bug 4: Only escape unescaped quotes to avoid double-escaping \"
+    content = content.replace(/(?<!\\)"/g, '\\"');
     return content;
   });
 }
 
-/**
- * Strips C-style comments from a string, preserving strings and regex literals.
- */
+// ============================================================================
+// FIX Bug 1 + Bug 2: stripComments
+// Strips // and /* */ comments, correctly tracking escape sequences in strings.
+// ============================================================================
 function stripComments(str: string): string {
   let result = "";
   let i = 0;
   const len = str.length;
   let inString = false;
-  let stringChar = ""; // ' or "
-  let inComment = false; // // or /*
 
   while (i < len) {
     const char = str[i];
     const nextChar = str[i + 1];
 
-    if (!inString && !inComment) {
+    if (!inString) {
+      // Detect start of string
       if (char === '"') {
         inString = true;
-        stringChar = '"';
         result += char;
         i++;
         continue;
       }
+      // Detect // line comment
       if (char === "/" && nextChar === "/") {
         i += 2;
         while (i < len && str[i] !== "\n" && str[i] !== "\r") i++;
         continue;
       }
+      // Detect /* block comment */
       if (char === "/" && nextChar === "*") {
         i += 2;
         while (i < len && !(str[i] === "*" && str[i + 1] === "/")) i++;
-        i += 2;
+        i += 2; // skip closing */
         continue;
       }
-    } else if (inString) {
-      if (char === stringChar && str[i - 1] !== "\\") inString = false;
+      result += char;
+    } else {
+      // Inside a string — use isEscaped to correctly detect end of string
+      // FIX Bug 2: replaced `str[i-1] !== "\\"` with proper escaped-backslash check
+      if (char === '"' && !isEscaped(str, i)) {
+        inString = false;
+      }
+      result += char;
     }
 
-    if (!inComment) result += char;
     i++;
   }
+
   return result;
 }
 
-/**
- * Sanitize control characters in JSON strings
- * Escapes unescaped newlines, tabs, and other control characters
- */
+// ============================================================================
+// FIX Bug 3: sanitizeControlCharacters
+// Escapes unescaped control characters inside JSON string values.
+// Uses isEscaped() for reliable quote and escape tracking.
+// ============================================================================
 function sanitizeControlCharacters(str: string): string {
   let result = "";
   let inString = false;
@@ -182,44 +238,43 @@ function sanitizeControlCharacters(str: string): string {
 
   while (i < str.length) {
     const char = str[i];
-    const prevChar = i > 0 ? str[i - 1] : "";
 
-    // Track if we're inside a string
-    if (char === '"' && prevChar !== "\\") {
+    // FIX Bug 3: Use isEscaped() instead of fragile prevChar check
+    if (char === '"' && !isEscaped(str, i)) {
       inString = !inString;
       result += char;
       i++;
       continue;
     }
 
-    // If inside a string, escape control characters
     if (inString) {
-      if (char === "\n" && prevChar !== "\\") {
+      const code = char.charCodeAt(0);
+      // Only escape truly raw (unescaped) control characters
+      if (char === "\n") {
         result += "\\n";
-      } else if (char === "\r" && prevChar !== "\\") {
+      } else if (char === "\r") {
         result += "\\r";
-      } else if (char === "\t" && prevChar !== "\\") {
+      } else if (char === "\t") {
         result += "\\t";
-      } else if (char.charCodeAt(0) < 32 && prevChar !== "\\") {
-        // Other control characters
-        result += "\\u" + char.charCodeAt(0).toString(16).padStart(4, "0");
+      } else if (code < 32) {
+        result += "\\u" + code.toString(16).padStart(4, "0");
       } else {
         result += char;
       }
     } else {
       result += char;
     }
+
     i++;
   }
 
   return result;
 }
 
-/**
- * Fix unterminated strings by closing them properly
- */
+// ============================================================================
+// fixUnterminatedStrings — unchanged, logic was correct
+// ============================================================================
 function fixUnterminatedStrings(str: string): string {
-  // Count quotes to see if we have an unterminated string
   let quoteCount = 0;
   let escaped = false;
 
@@ -234,14 +289,10 @@ function fixUnterminatedStrings(str: string): string {
     escaped = false;
   }
 
-  // If odd number of quotes, we have an unterminated string
   if (quoteCount % 2 !== 0) {
-    // Find the last quote and close the string
     const lastQuote = str.lastIndexOf('"');
     if (lastQuote !== -1) {
-      // Add closing quote before any trailing braces
       let insertPos = str.length;
-      // Find where to insert the closing quote (before } or ])
       for (let i = str.length - 1; i > lastQuote; i--) {
         if (str[i] === "}" || str[i] === "]") {
           insertPos = i;
@@ -254,16 +305,13 @@ function fixUnterminatedStrings(str: string): string {
   return str;
 }
 
-/**
- * Repair incomplete JSON by closing unclosed braces/brackets
- */
+// ============================================================================
+// FIX Bug 8: repairIncompleteJSON
+// Removed unused openBraces / openBrackets counters.
+// ============================================================================
 function repairIncompleteJSON(str: string): string {
-  let openBraces = 0;
-  let openBrackets = 0;
   let inString = false;
   let escaped = false;
-
-  // Track specific opening characters to ensure correct closing order
   const stack: string[] = [];
 
   for (let i = 0; i < str.length; i++) {
@@ -280,19 +328,12 @@ function repairIncompleteJSON(str: string): string {
 
     if (!inString) {
       if (char === "{") {
-        openBraces++;
         stack.push("}");
-      }
-      if (char === "}") {
-        openBraces--;
+      } else if (char === "}") {
         if (stack.length > 0 && stack[stack.length - 1] === "}") stack.pop();
-      }
-      if (char === "[") {
-        openBrackets++;
+      } else if (char === "[") {
         stack.push("]");
-      }
-      if (char === "]") {
-        openBrackets--;
+      } else if (char === "]") {
         if (stack.length > 0 && stack[stack.length - 1] === "]") stack.pop();
       }
     }
@@ -300,7 +341,7 @@ function repairIncompleteJSON(str: string): string {
     escaped = false;
   }
 
-  // Close any unclosed strings first
+  // Close any unclosed string first
   if (inString) {
     str += '"';
   }
@@ -313,7 +354,7 @@ function repairIncompleteJSON(str: string): string {
     str = trimmed + "null";
   }
 
-  // Close unclosed brackets and braces in reverse order of opening
+  // Close unclosed brackets/braces in reverse order
   while (stack.length > 0) {
     str += stack.pop();
   }
@@ -324,15 +365,11 @@ function repairIncompleteJSON(str: string): string {
 // ============================================================================
 // TYPE-SPECIFIC WRAPPERS
 // ============================================================================
-
 import { RoadmapData } from "../types/roadmap.types";
 import { TopicDetail } from "../types/topic.types";
 
 export function parseRoadmapJSON(content: string): RoadmapData {
   const parsed = baseParseJSON(content);
-  // Optional: Add specific roadmap validation if needed here,
-  // currently we return strict type but validRoadmapData is called by consumer usually?
-  // Use parseAndValidateRoadmap for full safety.
   return parsed as RoadmapData;
 }
 
@@ -360,6 +397,7 @@ export function parseAndValidateRoadmap(content: string): RoadmapData | null {
       console.error("[JSON-Parser] Roadmap Validation Failed");
       return null;
     }
+
     return parsed;
   } catch (error) {
     console.error("[JSON-Parser] Roadmap Parse Error:", error);
@@ -375,11 +413,10 @@ export function validateTopicDetail(data: any): data is TopicDetail {
     const hasIntroduction =
       data.sections.introduction &&
       typeof data.sections.introduction.markdown === "string";
-    // We can add more strict checks if needed, but this is a good baseline
     return typeof data.title === "string" && hasIntroduction;
   }
 
-  // Fallback check for old structure (optional, for backward compatibility)
+  // Fallback check for old structure (backward compatibility)
   return (
     typeof data.title === "string" &&
     (typeof data.overview === "string" ||
@@ -411,8 +448,8 @@ export function ensureRoadmapIds(roadmapData: any) {
 
   roadmapData.phases = roadmapData.phases.map((phase: any, pIndex: number) => {
     const phaseId = phase.id || randomUUID();
-
     const topics = Array.isArray(phase.topics) ? phase.topics : [];
+
     const topicsWithIds = topics.map((topic: any, tIndex: number) => ({
       ...topic,
       id: topic.id || randomUUID(),

@@ -85,7 +85,10 @@ export async function getTopicDetail(req: Request, res: Response) {
 
     if (cachedContent) {
       console.log(`[Topic] ✅ Returning cached content from database`);
-      return res.json(cachedContent.content);
+      return res.json({
+        ...(cachedContent.content as any),
+        topicContentId: cachedContent.id,
+      });
     }
 
     console.log(`[Topic] Fetching from FastAPI (not cached)`);
@@ -120,6 +123,7 @@ export async function getTopicDetail(req: Request, res: Response) {
     }
 
     const topicDetail = await response.json();
+    let topicContentId: string | undefined;
 
     // Cache the content in database if roadmapId is provided
     if (roadmapId) {
@@ -135,6 +139,7 @@ export async function getTopicDetail(req: Request, res: Response) {
             content: topicDetail as any,
           },
         });
+        topicContentId = createdContent.id;
         console.log(
           `[Topic]  Cached content in database with ID: ${createdContent.id}`,
         );
@@ -146,7 +151,10 @@ export async function getTopicDetail(req: Request, res: Response) {
 
     console.log(`[Topic]  Successfully fetched topic detail`);
 
-    res.json(topicDetail);
+    res.json({
+      ...topicDetail,
+      topicContentId,
+    });
   } catch (error: any) {
     console.error("[Topic] Error fetching topic detail:", error);
 
@@ -239,6 +247,12 @@ export async function getTopicStream(req: Request, res: Response) {
         }
       }
     }
+    console.log(
+      `[Topic stream] Fetching detail for: ${topicTitle} (PhaseTitle ${phaseTitle} goal : ${goal})`,
+    );
+    console.log(
+      `[Topic stream] Fetching detail for topicId=${topicId}, phaseId=${phaseId}`,
+    );
 
     //  2) Call FastAPI stream using extracted values
     const fastApiUrl = process.env.FASTAPI_URL || DEFAULT_FASTAPI_URL;
