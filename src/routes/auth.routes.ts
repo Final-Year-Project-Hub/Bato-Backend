@@ -16,6 +16,7 @@ import { ApiResponse } from "../utils/apiResponse";
 import passport from "passport";
 import { generateAccessToken, generateRefreshToken } from "../utils/jwt";
 import { prisma } from "@/lib/prisma";
+import jwt, { JwtPayload } from "jsonwebtoken";
 const router: Router = Router();
 
 router.route("/signup").post(errorHandler(signUp));
@@ -92,6 +93,14 @@ router.get(
 
       const accessToken = generateAccessToken(user.id);
       const refreshToken = generateRefreshToken(user.id);
+
+      console.log("Access token:", accessToken);
+      console.log("Refresh token:", refreshToken);
+
+      console.log(
+        "Decoded Access Token :",
+        jwt.verify(accessToken, process.env.ACCESS_TOKEN_SECRET!),
+      );
 
       // ✅ Save refreshToken in DB
       await prisma.user.update({
