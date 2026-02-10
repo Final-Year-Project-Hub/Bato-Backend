@@ -109,7 +109,7 @@ router.get(
       res.cookie("refreshToken", refreshToken, cookieOptions);
 
       return res.redirect(
-        `${process.env.FRONTEND_URL}/?accessToken=${encodeURIComponent(
+        `${process.env.FRONTEND_URL}/api/session/set?accessToken=${encodeURIComponent(
           accessToken,
         )}&refreshToken=${encodeURIComponent(refreshToken)}`,
       );
