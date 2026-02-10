@@ -11,10 +11,10 @@ import {
   forgotPassword,
 } from "../controllers/auth.controller";
 import { errorHandler } from "../middlewares/error-handler";
-import { verifyUser,verifyAdmin } from "../middlewares/auth.middleware";
+import { verifyUser, verifyAdmin } from "../middlewares/auth.middleware";
 import { ApiResponse } from "../utils/apiResponse";
 import passport from "passport";
-import {generateAccessToken, generateRefreshToken } from "../utils/jwt";
+import { generateAccessToken, generateRefreshToken } from "../utils/jwt";
 import { prisma } from "@/lib/prisma";
 const router: Router = Router();
 
@@ -25,8 +25,10 @@ router.route("/verifyOtp").post(errorHandler(verifyOtp));
 router.route("/resendOtp").post(errorHandler(resendOtp));
 router.route("/resetPassword").post(errorHandler(resetPassword));
 router.route("/forgotPassword").post(errorHandler(forgotPassword));
-router.route("/overViewSummary").get(verifyUser,verifyAdmin, errorHandler(overViewSummary));
-router.route("/users").get(verifyAdmin,errorHandler(users))
+router
+  .route("/overViewSummary")
+  .get(verifyUser, verifyAdmin, errorHandler(overViewSummary));
+router.route("/users").get(verifyAdmin, errorHandler(users));
 router.get("/profile", verifyUser, (req, res) => {
   res.json({ message: "Access granted!", user: (req as any).user });
 });
@@ -72,7 +74,7 @@ router.get(
     scope: ["profile", "email"],
     session: false,
     prompt: "select_account",
-  })
+  }),
 );
 
 /**
@@ -106,10 +108,14 @@ router.get(
       res.cookie("accessToken", accessToken, cookieOptions);
       res.cookie("refreshToken", refreshToken, cookieOptions);
 
-      return res.redirect(`${process.env.FRONTEND_URL}/chat`);
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/chat?accessToken=${encodeURIComponent(
+          accessToken,
+        )}&refreshToken=${encodeURIComponent(refreshToken)}`,
+      );
     } catch (err) {
       next(err);
     }
-  }
+  },
 );
 export default router;
