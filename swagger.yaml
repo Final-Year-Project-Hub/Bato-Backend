@@ -2110,6 +2110,100 @@ paths:
           description: Failed to fetch best attempt
 
 
+
+  /api/quiz/user/{userId}:
+    get:
+      summary: Get quizzes by user ID
+      description: Retrieve all quiz attempts for a specific user.
+      tags:
+        - Quiz
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the user to fetch quizzes for
+      responses:
+        "200":
+          description: Quiz attempts retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    userId:
+                      type: string
+                      format: uuid
+                    topicContentId:
+                      type: string
+                      format: uuid
+                    answers:
+                      type: object
+                    score:
+                      type: number
+                      format: float
+                    totalQuestions:
+                      type: integer
+                    correctAnswers:
+                      type: integer
+                    timeSpent:
+                      type: integer
+                      nullable: true
+                    completedAt:
+                      type: string
+                      format: date-time
+        "400":
+          description: Invalid user ID
+        "500":
+          description: Failed to fetch quiz attempts
+
+
+  /api/quiz/quizAttempts:
+    get:
+      summary: Get all quiz attempts
+      description: Retrieve a list of all quiz attempts in the system.
+      tags:
+        - Quiz
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        "200":
+          description: All quiz attempts retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    userId:
+                      type: string
+                      format: uuid
+                    topicContentId:
+                      type: string
+                      format: uuid
+                    completedAt:
+                      type: string
+                      format: date-time
+        "401":
+          description: Unauthorized
+        "500":
+          description: Failed to fetch quiz attempts
+
   # ==================== User Endpoints ====================
   /api/user/getAllUsers:
     get:

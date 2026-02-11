@@ -1,7 +1,8 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import axios from "axios";
 import { progressService } from "../services/progress.service";
+import { nextTick } from "process";
 
 const AI_SERVICE_URL = process.env.FASTAPI_URL || "http://localhost:8000";
 
@@ -356,3 +357,57 @@ function calculateScore(
     feedback,
   };
 }
+
+export const getAllQuizAttempts = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const allQuiz = await prisma.quizAttempt.findMany({
+      select: {
+        id: true,
+        userId: true,
+        topicContentId: true,
+        completedAt: true,
+      },
+    });
+    res.json(allQuiz);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getQuizByUserId = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { userId } = req.params as { userId: string };
+
+    if (!userId || typeof userId !== "string") {
+      return res.status(400).json({ error: "Invalid user ID" });
+    }
+
+    const quizAttempts = await prisma.quizAttempt.findMany({
+      where: {
+        userId: userId,
+      },
+      select: {
+        id: true,
+        userId: true,
+        topicContentId: true,
+        completedAt: true,
+        score: true,
+      },
+      orderBy: {
+        completedAt: "desc",
+      },
+    });
+
+    res.json(quizAttempts);
+  } catch (error) {
+    next(error);
+  }
+};
