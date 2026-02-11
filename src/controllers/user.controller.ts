@@ -164,7 +164,21 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
                 name: true,
                 email: true,
                 image: true,
+                googleId: true,
                 role: true,
+                roadmaps: {
+                    where: { isSelected: true },
+                    select: {
+                        id: true,
+                        title: true,
+                        goal: true,
+                        proficiency: true,
+                        isSelected: true,
+                        createdAt: true,
+                        updatedAt: true
+                    }
+                },
+                knownTech: true,
                 createdAt: true,
                 updatedAt: true,
             },
