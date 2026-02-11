@@ -2113,7 +2113,7 @@ paths:
 
   /api/quiz/user/{userId}:
     get:
-      summary: Get quizzes by user ID
+      summary: Get quizzes by user id
       description: Retrieve all quiz attempts for a specific user.
       tags:
         - Quiz
