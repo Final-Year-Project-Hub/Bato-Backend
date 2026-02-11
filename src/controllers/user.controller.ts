@@ -163,6 +163,7 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
                 id: true,
                 name: true,
                 email: true,
+                emailVerified:true,
                 image: true,
                 googleId: true,
                 role: true,
