@@ -2243,3 +2243,51 @@ paths:
           description: Unauthorized
         "500":
           description: Internal Server Error
+
+  /api/user/recentActivity:
+    get:
+      summary: Get recent activity
+      description: Get a feed of recent user activities (Quiz attempts and Roadmap interactions)
+      tags:
+        - User
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        "200":
+          description: Recent activity fetched successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Recent activity fetched successfully"
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                          enum: [QUIZ_ATTEMPTED, TOPIC_COMPLETED]
+                          example: "QUIZ_ATTEMPTED"
+                        id:
+                          type: string
+                          format: uuid
+                        title:
+                          type: string
+                          example: "Quiz: React Basics"
+                        timestamp:
+                          type: string
+                          format: date-time
+                        metadata:
+                          type: object
+        "401":
+          description: Unauthorized
+        "500":
+          description: Internal Server Error

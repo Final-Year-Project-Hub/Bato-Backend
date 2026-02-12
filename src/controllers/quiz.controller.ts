@@ -49,6 +49,33 @@ export const submitQuizAttempt = async (req: Request, res: Response) => {
         timeSpent: timeSpent || null,
         result: passed,
       },
+      include: {
+        topicContent: {
+            select: {
+                topicTitle: true,
+                phaseId: true,
+                roadmapId: true
+            }
+        }
+      }
+    });
+
+    // Log User Activity
+    await prisma.userActivity.create({
+        data: {
+            userId,
+            type: "QUIZ_ATTEMPTED",
+            entityId: attempt.id,
+            metadata: {
+                quizId: quiz.id,
+                score,
+                result: passed ? "Passed" : "Failed",
+                topicContentId,
+                title: `Quiz: ${attempt.topicContent.topicTitle}`,
+                roadmapId: attempt.topicContent.roadmapId,
+                phaseId: attempt.topicContent.phaseId
+            }
+        }
     });
 
     if (passed) {

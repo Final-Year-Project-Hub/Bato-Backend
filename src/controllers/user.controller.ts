@@ -178,3 +178,32 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
     }
 } 
 
+export const getRecentActivity = async (req: Request, res: Response, next: NextFunction) => {
+    const userId = req.user?.id;
+    if (!userId) {
+        throw new BadRequestException("User ID is required", ErrorCode.BAD_REQUEST);
+    }
+
+    try {
+        const activities = await prisma.userActivity.findMany({
+            where: { userId },
+            orderBy: { createdAt: 'desc' },
+            take: 20
+        });
+
+                const formattedActivities = activities.map(activity => ({
+            id: activity.id,
+            type: activity.type,
+            entityId: activity.entityId,
+            timestamp: activity.createdAt,
+            title: (activity.metadata as any)?.title || (activity.metadata as any)?.topicTitle || "Unknown Activity",
+            metadata: activity.metadata
+        }));
+
+        res.status(200).json(new ApiResponse("Recent activity fetched successfully", formattedActivities));
+
+    } catch (error) {
+        next(error);
+    }
+}
+
