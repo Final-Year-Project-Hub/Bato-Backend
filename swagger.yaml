@@ -2246,7 +2246,7 @@ paths:
 
   /api/user/recentActivity:
     get:
-      summary: Get recent activity
+      summary: Get recent Activity
       description: Get a feed of recent user activities (Quiz attempts and Roadmap interactions)
       tags:
         - User
