@@ -46,6 +46,7 @@ export const verifyUser = async (
           role: true,
         },
       });
+          console.log("Refresh token",decoded);
 
       if (!user) {
         throw new UnauthorizedException(
@@ -63,6 +64,7 @@ export const verifyUser = async (
         );
       }
     }
+    console.log("Access token expired",accessToken);
 
     // Access token expired, try refresh token
     const refreshToken = req.cookies.refreshToken;
@@ -73,6 +75,7 @@ export const verifyUser = async (
         ErrorCode.UNAUTHORIZED_REQUEST,
       );
     }
+    console.log("RefreshToken",refreshToken);
 
     const decodedRefresh = jwt.verify(
       refreshToken,
@@ -82,6 +85,7 @@ export const verifyUser = async (
     const user = await prisma.user.findUnique({
       where: { id: decodedRefresh.data.id },
     });
+    console.log("Decoded refresh",decodedRefresh)
 
     if (!user || !user.refreshToken) {
       throw new UnauthorizedException(
@@ -105,6 +109,7 @@ export const verifyUser = async (
     // Generate new tokens
     const { accessToken: newAccessToken, refreshToken: newRefreshToken } =
       await generateAccessandRefreshToken(user.id);
+
 
     res.cookie("accessToken", newAccessToken, cookieOptions);
     res.cookie("refreshToken", newRefreshToken, cookieOptions);

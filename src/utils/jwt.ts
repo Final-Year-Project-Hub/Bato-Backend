@@ -26,7 +26,7 @@ export const generateAccessToken = (user: JwtPayload) => {
         },
       },
       secret,
-      { expiresIn: "5m" }
+      { expiresIn: "1d" }
     );
   } catch (error: any) {
     console.error("JWT Generation Error (Access):", error);
