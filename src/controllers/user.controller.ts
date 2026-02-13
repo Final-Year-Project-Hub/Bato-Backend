@@ -191,14 +191,22 @@ export const getRecentActivity = async (req: Request, res: Response, next: NextF
             take: 20
         });
 
-                const formattedActivities = activities.map(activity => ({
-            id: activity.id,
-            type: activity.type,
-            entityId: activity.entityId,
-            timestamp: activity.createdAt,
-            title: (activity.metadata as any)?.title || (activity.metadata as any)?.topicTitle || "Unknown Activity",
-            metadata: activity.metadata
-        }));
+        const formattedActivities = activities.map(activity => {
+            const meta = activity.metadata as any;
+            return {
+                id: activity.id,
+                type: activity.type,
+                entityId: activity.entityId,
+                timestamp: activity.createdAt,
+                title: meta?.title || meta?.topicTitle || "Unknown Activity",
+                metadata: {
+                    ...meta,
+                    topicId: meta?.topicId || meta?.topicContentId, // Handle both potential keys
+                    roadmapId: meta?.roadmapId,
+                    phaseId: meta?.phaseId
+                }
+            };
+        });
 
         res.status(200).json(new ApiResponse("Recent activity fetched successfully", formattedActivities));
 

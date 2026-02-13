@@ -54,7 +54,8 @@ export const submitQuizAttempt = async (req: Request, res: Response) => {
             select: {
                 topicTitle: true,
                 phaseId: true,
-                roadmapId: true
+                roadmapId: true,
+                topicId: true
             }
         }
       }
@@ -73,7 +74,8 @@ export const submitQuizAttempt = async (req: Request, res: Response) => {
                 topicContentId,
                 title: `Quiz: ${attempt.topicContent.topicTitle}`,
                 roadmapId: attempt.topicContent.roadmapId,
-                phaseId: attempt.topicContent.phaseId
+                phaseId: attempt.topicContent.phaseId,
+                topicId: attempt.topicContent.topicId
             }
         }
     });
