@@ -205,6 +205,22 @@ export async function generateRoadmapStream(req: Request, res: Response) {
           `[Roadmap-Stream] Parsing full content (${fullContent.length} chars)`,
         );
 
+        // Debug: Log the actual content being parsed
+        console.log(`[Roadmap-Stream] Full content preview (first 500 chars):`);
+        console.log(fullContent.substring(0, 500));
+        console.log(
+          `[Roadmap-Stream] Full content preview (around position 109):`,
+        );
+        console.log(
+          fullContent.substring(
+            Math.max(0, 109 - 50),
+            Math.min(fullContent.length, 109 + 50),
+          ),
+        );
+        console.log(
+          `[Roadmap-Stream] Character at position 109: '${fullContent.charAt(109)}' (code: ${fullContent.charCodeAt(109)})`,
+        );
+
         // Parse and validate roadmap data using utility
         const roadmapData = parseAndValidateRoadmap(fullContent);
         const roadmapDataWithIds = ensureRoadmapIds(roadmapData);

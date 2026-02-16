@@ -87,6 +87,17 @@ export function baseParseJSON(content: string): any {
       const aggressive = jsonStr.replace(/[^"0-9a-zA-Z\s]+(\s*[}])/g, "$1");
       return JSON.parse(aggressive);
     },
+
+    // F: Fix "Expected property name or '}'" - aggressive trailing comma removal
+    () => {
+      // Remove commas followed by any whitespace (including newlines) and then }
+      let fixed = jsonStr.replace(/,\s*}/g, "}");
+      // Remove commas followed by any whitespace and then ]
+      fixed = fixed.replace(/,\s*]/g, "]");
+      // Remove any orphaned commas at the end of lines before closing braces
+      fixed = fixed.replace(/,(\s*[\r\n]+\s*[}\]])/g, "$1");
+      return JSON.parse(fixed);
+    },
   ];
 
   let lastError: Error | null = null;
