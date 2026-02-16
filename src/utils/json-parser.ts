@@ -109,7 +109,21 @@ export function baseParseJSON(content: string): any {
     }
   }
 
-  throw new Error(`JSON Parse failed: ${lastError?.message}`);
+  // Enhanced error reporting with position context
+  const errorMsg = lastError?.message || "Unknown error";
+  const posMatch = errorMsg.match(/position (\d+)/);
+  let contextInfo = "";
+
+  if (posMatch) {
+    const pos = parseInt(posMatch[1]);
+    const start = Math.max(0, pos - 50);
+    const end = Math.min(jsonStr.length, pos + 50);
+    const context = jsonStr.substring(start, end);
+    const charAtPos = jsonStr.charAt(pos);
+    contextInfo = `\nContext around position ${pos}:\n"${context}"\nCharacter at position: '${charAtPos}' (code: ${charAtPos.charCodeAt(0)})`;
+  }
+
+  throw new Error(`JSON Parse failed: ${errorMsg}${contextInfo}`);
 }
 
 // ============================================================================
