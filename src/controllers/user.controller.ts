@@ -163,22 +163,9 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
                 id: true,
                 name: true,
                 email: true,
+                emailVerified: true,
                 image: true,
-                googleId: true,
-                role: true,
-                roadmaps: {
-                    where: { isSelected: true },
-                    select: {
-                        id: true,
-                        title: true,
-                        goal: true,
-                        proficiency: true,
-                        isSelected: true,
-                        createdAt: true,
-                        updatedAt: true
-                    }
-                },
-                knownTech: true,
+                roadmaps: true,
                 createdAt: true,
                 updatedAt: true,
             },
@@ -190,3 +177,41 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
         next(error);
     }
 } 
+
+export const getRecentActivity = async (req: Request, res: Response, next: NextFunction) => {
+    const userId = req.user?.id;
+    if (!userId) {
+        throw new BadRequestException("User ID is required", ErrorCode.BAD_REQUEST);
+    }
+
+    try {
+        const activities = await prisma.userActivity.findMany({
+            where: { userId },
+            orderBy: { createdAt: 'desc' },
+            take: 20
+        });
+
+        const formattedActivities = activities.map(activity => {
+            const meta = activity.metadata as any;
+            return {
+                id: activity.id,
+                type: activity.type,
+                entityId: activity.entityId,
+                timestamp: activity.createdAt,
+                title: meta?.title || meta?.topicTitle || "Unknown Activity",
+                metadata: {
+                    ...meta,
+                    topicId: meta?.topicId || meta?.topicContentId, // Handle both potential keys
+                    roadmapId: meta?.roadmapId,
+                    phaseId: meta?.phaseId
+                }
+            };
+        });
+
+        res.status(200).json(new ApiResponse("Recent activity fetched successfully", formattedActivities));
+
+    } catch (error) {
+        next(error);
+    }
+}
+

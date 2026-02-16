@@ -7,26 +7,27 @@ datasource db {
 }
 
 model User {
-  id            String                @id @default(uuid())
-  name          String?
-  email         String                @unique
-  emailVerified Boolean               @default(false)
-  password      String?
-  googleId      String?               @unique
-  image         String?
-  role          Role                  @default(USER)
-  isActive      Boolean               @default(true)
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
-  refreshToken  String?
-  chatSessions  ChatSession[]
-  roadmaps      Roadmap[]
-  knownTech     UserKnownTechnology[]
-  preferences   UserPreferences?
-  otps          Otp[]
+  id              String                @id @default(uuid())
+  name            String?
+  email           String                @unique
+  emailVerified   Boolean               @default(false)
+  password        String?
+  googleId        String?               @unique
+  image           String?
+  role            Role                  @default(USER)
+  isActive        Boolean               @default(true)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  refreshToken    String?
+  chatSessions    ChatSession[]
+  roadmaps        Roadmap[]
+  knownTech       UserKnownTechnology[]
+  preferences     UserPreferences?
+  otps            Otp[]
   document        Document[]
   quizAttempts    QuizAttempt[]
   documentSources DocumentSource[]
+  userActivities  UserActivity[]
 
   @@index([role])
   @@index([email])
@@ -86,52 +87,50 @@ model Message {
 }
 
 model RoadmapProgress {
-  id              String   @id @default(uuid())
-  roadmapId       String   @unique
-  completedPhaseIds Json     @default("[]")  // string[]
-  completedTopicIds Json     @default("[]")  // string[]
-  completedQuizPhaseIds Json @default("[]") 
-  currentPhaseId   String?
-  currentTopicId   String?
-  totalTimeSpent  Float    @default(0)
-  lastAccessedAt  DateTime @default(now())
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  roadmap         Roadmap  @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  id                    String   @id @default(uuid())
+  roadmapId             String   @unique
+  completedPhaseIds     Json     @default("[]") // string[]
+  completedTopicIds     Json     @default("[]") // string[]
+  completedQuizPhaseIds Json     @default("[]")
+  currentPhaseId        String?
+  currentTopicId        String?
+  totalTimeSpent        Float    @default(0)
+  lastAccessedAt        DateTime @default(now())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  roadmap               Roadmap  @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
 
   @@index([roadmapId])
 }
 
 model TopicContent {
-  id          String   @id @default(uuid())
-  roadmapId   String
+  id        String @id @default(uuid())
+  roadmapId String
   phaseId   String
   topicId   String
 
-  
   // Topic identification
   topicTitle  String
   phaseNumber Int
   phaseTitle  String
-  
+
   // Generated content (stored as JSON)
-  content     Json
-  
+  content Json
+
   // Metadata
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relations
   roadmap      Roadmap       @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
   quizAttempts QuizAttempt[]
   quizzes      Quiz[]
-  
+
   // Ensure one topic content per roadmap/phase/topic combination
   @@unique([roadmapId, phaseId, topicId], name: "roadmapId_phaseId_topicId")
   @@index([roadmapId])
   @@index([roadmapId, phaseId])
 }
-
 
 model UserPreferences {
   userId             String   @id
@@ -206,53 +205,53 @@ model Ingest {
   @@index([status])
 }
 
-model Quiz{
-  id String @id @default(uuid())
-  topicContentId  String
+model Quiz {
+  id             String @id @default(uuid())
+  topicContentId String
 
-  questions Json
-  answers Json  
-  totalQuestions  Int
-  explanation     Json
-  difficulty      String
-  concept         String
-  sourceSection   String
-  learningObjective  String
-  passingScore    Float
-  estimatedTime   Int
+  questions           Json
+  answers             Json
+  totalQuestions      Int
+  explanation         Json
+  difficulty          String
+  concept             String
+  sourceSection       String
+  learningObjective   String
+  passingScore        Float
+  estimatedTime       Int
   difficultyBreakdown Json
-  conceptCoverage Json
-  codeQuestionCount Int
+  conceptCoverage     Json
+  codeQuestionCount   Int
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  topicContent TopicContent @relation(fields: [topicContentId], references: [id], onDelete: Cascade)
+  topicContent TopicContent  @relation(fields: [topicContentId], references: [id], onDelete: Cascade)
   quizAttempts QuizAttempt[]
 
   @@index([topicContentId])
 }
 
 model QuizAttempt {
-  id              String       @id @default(uuid())
-  userId          String
-  topicContentId  String
-  quizId          String?
+  id             String  @id @default(uuid())
+  userId         String
+  topicContentId String
+  quizId         String?
 
   // Quiz data
-  answers         Json         // User's answers { questionId: selectedOption }
-  score           Float        // Percentage score (0-100)
-  totalQuestions  Int
-  correctAnswers  Int
-  result          Boolean?
+  answers        Json // User's answers { questionId: selectedOption }
+  score          Float // Percentage score (0-100)
+  totalQuestions Int
+  correctAnswers Int
+  result         Boolean?
   // Metadata
-  timeSpent       Int?         // Time spent in seconds
-  completedAt     DateTime     @default(now())
-  
+  timeSpent      Int? // Time spent in seconds
+  completedAt    DateTime @default(now())
+
   // Relations
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  topicContent    TopicContent @relation(fields: [topicContentId], references: [id], onDelete: Cascade)
-  quiz            Quiz?        @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicContent TopicContent @relation(fields: [topicContentId], references: [id], onDelete: Cascade)
+  quiz         Quiz?        @relation(fields: [quizId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([quizId])
@@ -261,53 +260,53 @@ model QuizAttempt {
 }
 
 model DocumentSource {
-  id              String          @id @default(uuid())
-  
+  id String @id @default(uuid())
+
   // Framework Info (Required)
-  frameworkKey    String          @unique
-  frameworkName   String
-  version         String
-  baseUrl         String
-  
+  frameworkKey  String @unique
+  frameworkName String
+  version       String
+  baseUrl       String
+
   // File Handling (Required)
-  extensions      String[]
-  subdirectory    String?
-  
+  extensions   String[]
+  subdirectory String?
+
   // Preprocessing (Optional)
-  removePatterns  String[]        @default([])
-  cleanWhitespace Boolean         @default(true)
-  
+  removePatterns  String[] @default([])
+  cleanWhitespace Boolean  @default(true)
+
   // URL Configuration (Optional)
-  pathPrefix      String?
-  stripNumPrefix  Boolean         @default(false)
-  replaceExts     Json?
-  
+  pathPrefix     String?
+  stripNumPrefix Boolean @default(false)
+  replaceExts    Json?
+
   // Storage Info
-  storageKey      String?
-  docsPath        String
-  collectionName  String          @default("framework_docs")
-  fileCount       Int?
-  totalSize       Int?
-  
+  storageKey     String?
+  docsPath       String
+  collectionName String  @default("framework_docs")
+  fileCount      Int?
+  totalSize      Int?
+
   // Ingestion Status
-  status          IngestionStatus @default(QUEUED)
-  chunksIndexed   Int?
-  lastIngestedAt  DateTime?
-  errorMessage    String?
-  
+  status         IngestionStatus @default(QUEUED)
+  chunksIndexed  Int?
+  lastIngestedAt DateTime?
+  errorMessage   String?
+
   // Ingestion Parameters (Optional - use defaults if not set)
-  targetTokens    Int             @default(500)
-  maxTokens       Int             @default(2000)
-  recreateCollection Boolean      @default(false)
-  
+  targetTokens       Int     @default(500)
+  maxTokens          Int     @default(2000)
+  recreateCollection Boolean @default(false)
+
   // Metadata
-  uploadedBy      String
-  uploadedAt      DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  
+  uploadedBy String
+  uploadedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
   // Relations
-  uploader        User            @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
-  
+  uploader User @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+
   @@index([frameworkKey])
   @@index([status])
   @@index([uploadedBy])
@@ -336,4 +335,25 @@ enum IngestionStatus {
   PROCESSING
   INGESTED
   FAILED
+}
+
+model UserActivity {
+  id        String       @id @default(uuid())
+  userId    String
+  type      ActivityType
+  entityId  String // ID of topic, quiz attempt, etc.
+  metadata  Json // Store title, score, etc.
+  createdAt DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+enum ActivityType {
+  TOPIC_COMPLETED
+  QUIZ_ATTEMPTED
+  ROADMAP_CREATED
+  PROFILE_UPDATED
 }

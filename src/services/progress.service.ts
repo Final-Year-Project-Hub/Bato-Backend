@@ -52,6 +52,21 @@ function extractRoadmapIds(roadmapData: RoadmapData) {
   return { phaseIds, phaseToTopicIds, topicIdToNext };
 }
 
+function findTopicTitle(roadmapData: any, topicId: string): string | null {
+    if (!roadmapData || !Array.isArray(roadmapData.phases)) return null;
+    
+    for (const phase of roadmapData.phases) {
+        if (Array.isArray(phase.topics)) {
+            for (const topic of phase.topics) {
+                if (topic.id === topicId) {
+                    return topic.topicTitle || topic.title || "Unknown Topic";
+                }
+            }
+        }
+    }
+    return null;
+}
+
 export class ProgressService {
   private async getUserRoadmapOrThrow(roadmapId: string, userId: string) {
     const roadmap = await prisma.roadmap.findFirst({
@@ -196,6 +211,25 @@ export class ProgressService {
           currentTopicId: nextTopicId,
           lastAccessedAt: new Date(),
         },
+      });
+
+      // Log activity
+      await prisma.userActivity.create({
+        data: {
+            userId,
+            type: "TOPIC_COMPLETED",
+            entityId: topicId,
+            metadata: {
+                roadmapId,
+                phaseId,
+                topicId,
+                // Note: We don't have topic title here easily without fetching roadmapData again or passing it down
+                // For now we store IDs. The frontend or controller can resolve titles if needed, 
+                // or we can fetch it. Ideally we should store the title in metadata for easier display.
+                // Let's try to extract it from roadmapData which we already have in `data` variable.
+                topicTitle: findTopicTitle(data, topicId) || "Unknown Topic"
+            }
+        }
       });
 
       return { updated, phaseAllDone };
